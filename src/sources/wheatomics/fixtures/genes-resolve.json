@@ -1,0 +1,41 @@
+{
+  "capture": {
+    "url": "https://wheatomics.sdau.edu.cn/api/genes/resolve?ID=TraesCS5A03G0935400",
+    "at": "2026-11-10T14:11:53.025703Z",
+    "capturedAt": "2026-11-10T14:11:53.025729Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 575,
+    "sourceSha256": "23417987CD8073FD670B82E35E031BC3521BB30A44B6E2AAE89617C12BEE8B55",
+    "rawBodySource": "re-collected",
+    "simulated": false,
+    "note": "真实抓取 2026-11-10；03G→02G 换算（gene_primary=03G, gene_secondary=02G, chinese_spring_02g, 坐标 Mb）"
+  },
+  "rawBody": "{\"success\":true,\"message\":\"ok\",\"timestamp\":\"2026-11-10T14:11:52.996792+00:00\",\"data\":{\"query\":\"TraesCS5A03G0935400\",\"count\":1,\"mappings\":[{\"chromosome\":\"chr5A\",\"start_mb\":589.259335,\"end_mb\":589.271297,\"gene_primary\":\"TraesCS5A03G0935400\",\"gene_secondary\":\"TraesCS5A02G391700\",\"strand\":\"-\",\"description\":null,\"domain\":\"PF00319: SRF-type transcription factor (DNA-binding and dimerisation domain); PF01486: K-box region\",\"chinese_spring_02g\":\"TraesCS5A02G391700\",\"table\":\"Genefunc_CS_IWGSC03G_table\",\"dataset\":\"Chinese Spring 03G\",\"group\":\"Allohexaploid\",\"ploidy\":\"AABBDD\"}]}}",
+  "payload": {
+    "success": true,
+    "message": "ok",
+    "timestamp": "2026-11-10T14:11:52.996792+00:00",
+    "data": {
+      "query": "TraesCS5A03G0935400",
+      "count": 1,
+      "mappings": [
+        {
+          "chromosome": "chr5A",
+          "start_mb": 589.259335,
+          "end_mb": 589.271297,
+          "gene_primary": "TraesCS5A03G0935400",
+          "gene_secondary": "TraesCS5A02G391700",
+          "strand": "-",
+          "description": null,
+          "domain": "PF00319: SRF-type transcription factor (DNA-binding and dimerisation domain); PF01486: K-box region",
+          "chinese_spring_02g": "TraesCS5A02G391700",
+          "table": "Genefunc_CS_IWGSC03G_table",
+          "dataset": "Chinese Spring 03G",
+          "group": "Allohexaploid",
+          "ploidy": "AABBDD"
+        }
+      ]
+    }
+  }
+}

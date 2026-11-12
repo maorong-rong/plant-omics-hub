@@ -1,0 +1,128 @@
+/* 源市场页（`site/market.html`）：卡片网格 + 订阅集计数条 + 数据时刻。
+   配色沿用 `assets/style.css` 的变量（暗色自动跟随）；这里只补市场页专有的几块。 */
+
+/* 变量别名：市场页历史文案用的是 --panel / --warn / --warn-soft，
+   它们在 style.css 里分别叫 --surface / --t2 / --t2-soft。别名只在此声明一次，
+   免得同一套配色在两份文件里各写一遍、改一处忘一处。 */
+:root {
+  --panel: var(--surface);
+  --warn: var(--t2);
+  --warn-soft: var(--t2-soft);
+}
+
+/* 数据时刻条：只有它一条，不塞进顶栏（窄屏顶栏要折行，塞进去会挤掉导航） */
+.mk-status {
+  display: inline-flex; align-items: center; gap: 7px;
+  margin: 18px 0 0; padding: 4px 12px;
+  font-family: var(--mono); font-size: 12px; color: var(--ink-2);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+}
+.mk-status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex: 0 0 auto; }
+.mk-status[data-state="ok"] .dot { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.mk-hero { padding: 22px 0 10px; }
+.mk-hero h1 { font-size: clamp(22px, 3vw, 30px); letter-spacing: -.02em; margin: 0 0 6px; }
+.mk-hero .lede { color: var(--ink-2); margin: 0; max-width: 66ch; }
+
+/* 订阅集计数条：常驻，滚动时不离开视野。
+   顶栏高度 64px（style.css `.header-inner`）——两处一起改。 */
+.subbar {
+  position: sticky; top: 64px; z-index: 12;
+  margin: 16px 0 18px; padding: 12px 14px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: var(--shadow);
+}
+.subbar-nums { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: baseline; }
+.sub-n { display: flex; flex-direction: column; min-width: 0; }
+.sub-n .v { font-size: 21px; font-weight: 680; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.sub-n .k { font-size: 11.5px; color: var(--ink-3); }
+.sub-n .src-tag { font-size: 10.5px; color: var(--ink-3); font-family: var(--mono); }
+.subbar-bar { margin: 10px 0 8px; height: 7px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.subbar-bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .18s ease, background .18s ease; }
+.subbar-bar.warn span { background: var(--warn); }
+.subbar-bar.over span { background: var(--bad); }
+.subbar-note { margin: 0; font-size: 12.3px; color: var(--ink-3); }
+
+.verdict { margin: 10px 0 0; padding: 10px 13px; border-radius: 10px; font-size: 13.2px; line-height: 1.65; border: 1px solid var(--line); }
+.verdict.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.verdict.bad { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
+.verdict b { font-weight: 680; }
+.verdict ul { margin: 6px 0 0; padding-left: 18px; }
+
+.mk-stub {
+  margin: 12px 0 0; padding: 8px 12px; border-radius: 10px;
+  background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+  color: var(--ink-2); font-size: 12.5px;
+}
+.mk-stub b { color: var(--warn); }
+
+/* schema 错误单独一条：红色，措辞必须和「未就绪」区分开 */
+.mk-schema {
+  margin: 12px 0 0; padding: 9px 12px; border-radius: 10px;
+  background: var(--bad-soft); border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent);
+  color: var(--ink-2); font-size: 12.5px; line-height: 1.6;
+}
+.mk-truncated { margin: 6px 0 0; font-size: 12px; color: var(--warn); }
+
+.mk-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 16px; }
+.mk-actions .btn { font-weight: 620; }
+.mk-actions button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.mk-hint { font-size: 12.5px; color: var(--ink-3); overflow-wrap: anywhere; }
+
+.mk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+
+.mk-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 13px 14px; display: grid; gap: 8px; min-width: 0;
+  transition: border-color .15s ease, transform .15s ease;
+}
+.mk-card:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.mk-card[data-on="true"] { border-color: color-mix(in srgb, var(--src, var(--accent)) 45%, var(--line)); box-shadow: inset 3px 0 0 var(--src, var(--accent)); }
+
+.mk-head { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.mk-head .nm { font-weight: 640; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-head .en { font-size: 11.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-head input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); flex: 0 0 auto; }
+
+.chip-icon { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; flex: 0 0 auto;
+  background: color-mix(in srgb, var(--src, var(--ink-3)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--src, var(--line)) 26%, transparent); color: var(--src, var(--ink-3)); }
+.chip-icon svg { width: 18px; height: 18px; }
+
+.tier { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px; }
+.tier.T1 { color: var(--accent-ink); background: var(--accent-soft); }
+.tier.T2 { color: var(--warn); background: var(--warn-soft); }
+
+.mk-nums { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.3px; color: var(--ink-3); font-family: var(--mono); }
+.mk-nums b { color: var(--ink-2); font-weight: 620; }
+
+.crops { display: flex; flex-wrap: wrap; gap: 5px; }
+.crop-tag { font-size: 11.5px; padding: 1px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent-ink);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); }
+.crop-tag.muted { background: transparent; color: var(--ink-3); border-color: var(--line); }
+
+.mk-blind { font-size: 12.3px; color: var(--ink-3); }
+.mk-blind summary { cursor: pointer; color: var(--accent-ink); }
+.mk-blind ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink-2); }
+
+/* 数字来源徽标：每个数字位都必须带，缺了就是设计不合格 */
+.src-tag { font-family: var(--mono); font-size: 10.5px; padding: 0 5px; border-radius: 4px;
+  border: 1px solid var(--line); color: var(--ink-3); white-space: nowrap; }
+.src-tag.live { border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent-ink); }
+.src-tag.pending { border-color: color-mix(in srgb, var(--warn) 45%, transparent); color: var(--warn); background: var(--warn-soft); }
+
+.mk-state { padding: 14px; border: 1px dashed var(--line); border-radius: 10px; color: var(--ink-3); font-size: 13px; text-align: center; }
+/* 「未就绪 / 0 个源」这类整页级说明独占一行，不要占掉一张卡片的位置 */
+.mk-state.full { grid-column: 1 / -1; text-align: left; line-height: 1.65; }
+
+.mk-source-note { margin: 18px 0 40px; font-size: 12.3px; color: var(--ink-3); }
+
+/* 窄屏：计数条不再吸顶（顶栏在最窄档会折成两行，吸顶会盖住卡片） */
+@media (max-width: 860px) {
+  .subbar { position: static; }
+}
+@media (max-width: 700px) {
+  .mk-grid { grid-template-columns: 1fr; }
+  .sub-n .v { font-size: 18px; }
+}

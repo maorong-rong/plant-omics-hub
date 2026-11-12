@@ -1,0 +1,508 @@
+/**
+ * 检索层能力目录（`hub_find_sources` 的唯一数据源）。
+ *
+ * 设计要点（由本文与 `test/` 的双向一致测试共同固定）：
+ *   - **语义放源级**（`SOURCE_SEMANTICS`），范围放工具级——防止逐工具乱标语义；
+ *   - 意图用**封闭词表**，加意图必须同时改这里与契约记录；
+ *   - 目录与注册表必须双向一致，由 `test/catalog-consistency.test.ts` 盯住。
+ *
+ * 这里只描述"哪个工具能干什么、覆盖什么"，**不描述上游是否可用**。
+ */
+
+/** 意图封闭词表。加一项 = 改这里 + 改契约记录 + 补双一致测试。 */
+export type IntentId =
+  | 'gene-search' | 'gene-detail' | 'expression' | 'variant' | 'homolog'
+  | 'sequence' | 'annotation' | 'tf' | 'synteny' | 'literature'
+  | 'taxonomy' | 'assembly' | 'sample' | 'id-convert' | 'reference-gene'
+  | 'interaction'
+  | 'catalog' | 'circrna' | 'lncrna';
+
+export interface IntentSpec {
+  readonly id: IntentId;
+  /** 中文标签，直接进输出 */
+  readonly label: string;
+  /** 归一化后的子串匹配词（中英都收） */
+  readonly keywords: readonly string[];
+}
+
+export const INTENTS: readonly IntentSpec[] = [
+  { id: 'gene-search', label: '基因搜索', keywords: ['基因搜索', '搜基因', '查找基因', '已知基因', '已克隆', '克隆基因', '基因列表', 'known gene', 'search gene', 'gene list'] },
+  { id: 'gene-detail', label: '基因详情', keywords: ['基因详情', '基因记录', '基因信息', '这个基因', 'gene detail', 'gene info'] },
+  { id: 'expression', label: '表达', keywords: ['表达', '表达量', '表达谱', 'fpkm', 'tpm', '组织表达', 'expression'] },
+  { id: 'variant', label: '变异', keywords: ['变异', '变异位点', 'snp', '多态', '突变', 'variant', 'variation'] },
+  { id: 'homolog', label: '同源', keywords: ['同源', '直系同源', '旁系同源', '对应基因', '跨物种', 'homolog', 'ortholog', 'paralog'] },
+  { id: 'sequence', label: '序列', keywords: ['序列', '核酸', '蛋白序列', 'cds', '氨基酸', 'sequence', 'fasta'] },
+  { id: 'annotation', label: '注释/结构域', keywords: ['注释', '结构域', '功能注释', 'pfam', 'domain', 'annotation'] },
+  { id: 'tf', label: '转录因子', keywords: ['转录因子', '家族', '转录调控', 'transcription factor'] },
+  { id: 'synteny', label: '共线', keywords: ['共线', '共线性', 'synteny', 'collinearity'] },
+  { id: 'literature', label: '文献', keywords: ['文献', '论文', 'paper', 'publication', 'pubmed', 'doi'] },
+  { id: 'taxonomy', label: '分类', keywords: ['分类', '分类单元', 'taxid', 'taxonomy'] },
+  { id: 'assembly', label: '组装', keywords: ['组装', '基因组', 'contig', 'scaffold', 'assembly', 'genome'] },
+  { id: 'sample', label: '样本/项目', keywords: ['样本', '项目', 'biosample', 'bioproject', 'sample', 'project'] },
+  { id: 'id-convert', label: 'ID 转换', keywords: ['id转换', '转换id', '映射', '同义id', 'convert', 'id convert'] },
+  { id: 'reference-gene', label: '内参基因', keywords: ['内参', '管家基因', '引物', 'primer', 'reference gene'] },
+  { id: 'catalog', label: '目录/发现', keywords: ['目录', '有哪些', '数据集', '概览', '列表', 'browse', 'catalog', 'dataset'] },
+  /**
+   * 蛋白互作：**只指"实验或预测的蛋白-蛋白互作伙伴"**（STRING 的 interaction_partners 那种）。
+   *
+   * 不算互作的三类，必须另找意图，别并进来：
+   *   - 同源/直系旁系 → homolog（同源 ≠ 互作，这是两类完全不同的生物学关系）；
+   *   - 通路上下游、共表达 → 各自意图，STRING 这个端点不给通路方向；
+   *   - 转录因子调控 → tf。
+   *
+   * 新意图上线时最容易出的事：别的源描述里恰好有"互作/相互作用"字样，被误判成能接。
+   * 所以配套断言（test/interaction-intent.test.ts）要求：**只有 STRING 声明这个意图**，
+   * 且其它源的工具描述/盲区里不出现这些命中词。
+   */
+  { id: 'interaction', label: '蛋白互作', keywords: ['互作', '相互作用', '蛋白互作', '互作网络', 'ppi', 'interaction', 'partner'] },
+  { id: 'circrna', label: 'circRNA', keywords: ['circrna', '环状rna'] },
+  { id: 'lncrna', label: 'lncRNA', keywords: ['lncrna', '长链非编码'] },
+];
+
+export const INTENT_BY_ID = new Map(INTENTS.map((intent) => [intent.id, intent]));
+
+/** 物种门策略：决定 `speciesScope.query` 怎么和问题里的物种比对 */
+export type SpeciesPolicy = 'coverage' | 'example-only' | 'any-by-id';
+/** 语义等级，用于排序（数字越小越优先） */
+export type Semantics = '承诺' | '实测' | '示例非承诺';
+
+export interface SourceSemantics {
+  readonly semantics: Semantics;
+  readonly policy: SpeciesPolicy;
+  /** policy=example-only 时必填：已实测的物种 */
+  readonly example?: readonly string[];
+}
+
+/**
+ * 源级语义（单一真相）。
+ * `semantics` 描述该源目录的**承诺强度**，不是"上游此刻可用"。
+ */
+export const SOURCE_SEMANTICS: Readonly<Record<string, SourceSemantics>> = {
+  wheatomics: { semantics: '承诺', policy: 'coverage' },
+  ic4r: { semantics: '承诺', policy: 'coverage' },
+  strawberry: { semantics: '承诺', policy: 'coverage' },
+  gramene: { semantics: '实测', policy: 'coverage' },
+  icg: { semantics: '示例非承诺', policy: 'example-only', example: ['玉米'] },
+  gwh: { semantics: '示例非承诺', policy: 'any-by-id', example: ['蒲公英'] },
+  scod: { semantics: '实测', policy: 'coverage' },
+  // 实测口径：四物种（拟南芥 TAIR10 / 水稻 IRGSP-1.0 / 小麦 IWGSC / 玉米 NAM-5.0）的
+  // lookup/id 均 200（release 116）。只承诺这四物种，不按"267 物种目录"声称覆盖。
+  ensemblplants: { semantics: '实测', policy: 'coverage' },
+  // STRING：实测拟南芥（3702）与水稻（39947 / 4530）两组，其余物种未测，不按目录声称覆盖。
+  string: { semantics: '实测', policy: 'coverage' },
+  // uniprot：实测四物种、按物种覆盖（policy 只用 'coverage'、semantics 只用 '实测'，两枚举已核）
+  uniprot: { semantics: '实测', policy: 'coverage' },
+  // interpro：参考数据集源，按 Pfam 编号取 HMM，不按物种查询；不能声称覆盖任何物种。
+  interpro: { semantics: '实测', policy: 'any-by-id' },
+};
+
+/**
+ * 物种别名：规范名 → 归一化后的匹配词。
+ *
+ * 分两类，**判据不同，别混**：
+ *   - 本服务**覆盖**的物种：见 `SPECIES_SATISFIES`，它们的 scope 会真的放行候选；
+ *   - 已知但**不覆盖**的物种（`SPECIES_WITHOUT_COVERAGE`）：进这张表的唯一目的是
+ *     **能识别、从而能精确拒答**（"大豆不在本服务目录"），而不是回落成全库候选。
+ *     识别不出来时宁可说"未识别出物种"，也不许拿不相干的源凑数。
+ *
+ * 粳稻与籼稻各自成项，**都不并进「水稻」**：IC4R 只收粳稻，gramene 实测的是 Indica。
+ * 合并成一个「水稻」的后果不是拒答，而是**看起来合规的错答**——比拒答危险得多。
+ */
+export const SPECIES_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  水稻: ['水稻', 'oryza sativa', 'oryza', 'rice'],
+  粳稻: ['粳稻', 'japonica'],
+  籼稻: ['籼稻', 'indica'],
+  小麦: ['小麦', '普通小麦', 'triticum aestivum', 'triticum', '中国春', 'chinese spring', 'wheat'],
+  /**
+   * 节节麦（Aegilops tauschii）：WheatOmics 的 `manifest.species` 里就写着它
+   * （该源盲区原文是「只覆盖小麦族（Triticum/Aegilops）」），但别名表此前没有这一项，
+   * 于是 `hub_status` 声称覆盖、`hub_find_sources` 认不出该物种——被
+   * `test/species-consistency.test.ts` 抓成口径漂移。补齐别名让两处一致，
+   * 同时不夸大：它只落在「小麦族」这一个 scope 里。
+   */
+  节节麦: ['节节麦', 'aegilops tauschii', 'aegilops'],
+  玉米: ['玉米', '苞米', 'zea mays', 'zea', 'maize', 'corn'],
+  拟南芥: ['拟南芥', 'arabidopsis thaliana', 'arabidopsis', 'thale cress'],
+  草莓: ['草莓', 'fragaria', 'strawberry'],
+  灰霉: ['灰霉', 'botrytis'],
+  蒲公英: ['蒲公英', 'taraxacum', '橡胶草', 'kok-saghyz'],
+  油菜: ['油菜', 'brassica napus', '甘蓝型油菜', 'rape'],
+  甘蔗: ['甘蔗', 'saccharum', 'sugarcane'],
+  大豆: ['大豆', '黄豆', 'glycine max', 'soybean', 'soy'],
+  番茄: ['番茄', '西红柿', 'solanum lycopersicum', 'tomato'],
+  人类: ['人类', '智人', 'homo sapiens', 'human'],
+};
+
+/**
+ * 已知、但本服务**没有任何源按物种覆盖**的物种。
+ *
+ * 用途有二：① 拒答时能点名（"不覆盖大豆"），而不是笼统说"未识别"；
+ * ② `test/hub-status-catalog.test.ts` 据此豁免"表里有、目录查不到"的一致性断言——
+ * 这张表是**唯一真相**，测试不许另写一份名单。
+ */
+export const SPECIES_WITHOUT_COVERAGE: readonly string[] = ['油菜', '大豆', '番茄', '人类'];
+
+/**
+ * 源名别名：归一化后的匹配词 → sourceId。
+ *
+ * 为什么必须有：`WheatOmics`、`Strawberry` 里含物种别名（wheat / strawberry），
+ * 不先把源名从文本里摘掉，`WheatOmics 查玉米的变异位点` 会被识别成"小麦+玉米"，
+ * 于是拿小麦的变异工具去答玉米——用错物种作答比答不出来严重得多。
+ */
+export const SOURCE_NAME_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  wheatomics: ['wheatomics', 'wheat omics', '小麦组学'],
+  strawberry: ['strawberry', '草莓数据库'],
+  gwh: ['gwh'],
+  icg: ['icg'],
+  ic4r: ['ic4r'],
+  gramene: ['gramene'],
+  scod: ['scod'],
+  ensemblplants: ['ensemblplants', 'ensembl plants'],
+  // 裸 'string' 是常见英文词，会把 'a string of' 之类误判成源名，所以只认带连字符/中文的写法。
+  string: ['string-db', 'string db', 'string数据库', 'string 数据库'],
+  // 'pfam' 故意不作源名别名：它在意图词表里是结构域/注释的命中词，收进来会把
+  // 「Pfam 家族成员」误判成「点名 interpro」，从而挡掉 wheatomics 的 Pfam 注释入口。
+  interpro: ['interpro', 'interpro数据库'],
+};
+
+/**
+ * 一个物种能满足哪些 `speciesScope` 写法。
+ * 目录里的 scope 是"覆盖口径"，不是物种名，必须显式映射，否则会静默漏召回。
+ */
+const SPECIES_SATISFIES: Readonly<Record<string, readonly string[]>> = {
+  水稻: ['水稻'],
+  // 粳稻满足"水稻"（IC4R 就是粳稻单物种、gramene 的 Oryza sativa 也含粳稻），
+  // 籼稻**不满足**"水稻"——它是另一个亚种，合并进水稻会产生"看起来合规的错答"。
+  粳稻: ['水稻'],
+  籼稻: ['籼稻'],
+  // 小麦同时承接两种口径：「小麦族」= 小麦族整族（WheatOmics 的覆盖口径），
+  // 「小麦」= 仅普通小麦 Triticum aestivum 单物种（Ensembl Plants 实测口径）。
+  // 两者不能合并：把单物种源写成"小麦族"是夸大覆盖，把整族源写成"小麦"会漏召回。
+  小麦: ['小麦族', '小麦'],
+  // 节节麦是小麦族的一员（WheatOmics 覆盖 Triticum/Aegilops），只承接「小麦族」这一种口径。
+  节节麦: ['小麦族'],
+  玉米: ['玉米'],
+  拟南芥: ['拟南芥'],
+  草莓: ['草莓', '草莓及相关病原', '草莓属（Fragaria）', '草莓属'],
+  灰霉: ['草莓及相关病原'],
+  蒲公英: ['蒲公英'],
+  油菜: ['油菜'],
+  甘蔗: ['甘蔗'],
+  // 已知但不覆盖：声明为空数组，表示"任何 scope 都不接"。
+  // 不能省成 undefined——省了会被读成"没登记"，与"登记为不覆盖"混为一谈。
+  大豆: [],
+  番茄: [],
+  人类: [],
+};
+
+export interface ToolCapability {
+  readonly tool: string;
+  readonly sourceId: string;
+  readonly intents: readonly IntentId[];
+  readonly speciesScope: {
+    readonly query?: readonly string[];
+    readonly target?: readonly string[];
+  };
+  /**
+   * 意图级"明确不做"。
+   *
+   * 必须是**结构化**的：`blocks` 明确列出被挡住的意图，而不是靠规则文本里出现
+   * "检索/区间"这类词去猜——猜法会漏（换种说法就失效）也会误伤（无关意图被牵连）。
+   *
+   * `when` 再限定"只有问题确实在问这种模式时才挡"：否则「按基因 ID 取序列」
+   * 会被「按区间取序列」的禁令误杀（审查 RETR-04 反例）。
+   */
+  readonly hardExcludes?: ReadonlyArray<{
+    readonly rule: string;
+    readonly blocks: readonly IntentId[];
+    readonly when?: RegExp;
+  }>;
+  readonly blindSpots: readonly string[];
+}
+
+const WHEAT_BLIND = ['只覆盖小麦族（Triticum/Aegilops），不代表网站全部模块已接入'];
+const GRAMENE_BLIND = ['实测物种只有 Oryza sativa / Indica Group，不声称覆盖禾本科'];
+const INTERPRO_BLIND = [
+  '参考数据集：只给 Pfam/InterPro 域模型 HMM，不返回任何物种的基因、蛋白、表达或变异数据；不按物种查询',
+  '一次只取一个 Pfam accession；上游没有批量 HMM 打包出口，多家族要逐个调用',
+  'HMM 正文在 structuredContent.hmm，不在正文；不跑 HMMER、不返回成员蛋白清单',
+];
+const ENSEMBL_BLIND = [
+  '只覆盖已实测四物种（拟南芥/水稻/小麦/玉米）；该 REST 跨分区、也服务非植物对象，按物种白名单与响应侧 species 双重拦截',
+  '基因 ID 分代次：玉米 B73 v4 旧编号（Zm00001d…）当前查无，且与"基因不存在"同形',
+  '查无是 HTTP 400 而非 404，与参数错误同码；未知形态一律报错，不归空',
+];
+const IC4R_BLIND = ['仅粳稻单物种；文档为 2018 版；不支持按基因名或区间检索'];
+const ICG_BLIND = ['实为物种目录（约 540 物种），仅实测玉米；不提供按名称搜索'];
+const GWH_BLIND = ['按精确 ID 查，不提供物种或关键词检索；不保证该 ID 有记录'];
+const STRAW_BLIND = ['表达仅已证实的草莓数据集；TF 仅 Fragaria；共线仅已证实装配'];
+
+/** 45 个源工具的能力登记。每个工具至少 1 个意图。 */
+export const TOOL_CAPABILITIES: readonly ToolCapability[] = [
+  // ---- wheatomics（小麦族）----
+  { tool: 'wheatomics_search_known_genes', sourceId: 'wheatomics', intents: ['gene-search'], speciesScope: { query: ['小麦族'] }, blindSpots: WHEAT_BLIND },
+  { tool: 'wheatomics_gene_detail', sourceId: 'wheatomics', intents: ['gene-detail'], speciesScope: { query: ['小麦族'] }, blindSpots: WHEAT_BLIND },
+  { tool: 'wheatomics_expression_projects', sourceId: 'wheatomics', intents: ['expression', 'catalog'], speciesScope: { query: ['小麦族'] }, blindSpots: WHEAT_BLIND },
+  { tool: 'wheatomics_expression_query', sourceId: 'wheatomics', intents: ['expression'], speciesScope: { query: ['小麦族'] }, blindSpots: [...WHEAT_BLIND, '表达值单位随项目而定，跨项目不可直接比大小'] },
+  { tool: 'wheatomics_search_papers', sourceId: 'wheatomics', intents: ['literature'], speciesScope: { query: ['小麦族'] }, blindSpots: ['只收小麦族文献，不是 PubMed 全量'] },
+  { tool: 'wheatomics_convert_gene_ids', sourceId: 'wheatomics', intents: ['id-convert'], speciesScope: { query: ['小麦族'] }, blindSpots: WHEAT_BLIND },
+  {
+    tool: 'wheatomics_cross_species_homologs',
+    sourceId: 'wheatomics',
+    intents: ['homolog'],
+    speciesScope: { query: ['小麦族'], target: ['水稻', '拟南芥'] },
+    blindSpots: ['目标域只有水稻与拟南芥，不含玉米', '不区分直系/旁系同源（上游无该字段）'],
+  },
+  { tool: 'wheatomics_variant_datasets', sourceId: 'wheatomics', intents: ['variant', 'catalog'], speciesScope: { query: ['小麦族'] }, blindSpots: ['genome_concordant 未知的数据集，0 条结果不可解读为"无变异"'] },
+  {
+    tool: 'wheatomics_variant_query',
+    sourceId: 'wheatomics',
+    intents: ['variant'],
+    speciesScope: { query: ['小麦族'] },
+    blindSpots: ['total=0 不等于该区间没有变异', '等端点区间（start==end）本地拒绝', '不支持按变异 ID 查'],
+  },
+  { tool: 'wheatomics_gene_annotation', sourceId: 'wheatomics', intents: ['annotation'], speciesScope: { query: ['小麦族'] }, blindSpots: [...WHEAT_BLIND, '坐标字段是 Mb 浮点，不是 bp'] },
+  {
+    tool: 'wheatomics_sequence',
+    sourceId: 'wheatomics',
+    intents: ['sequence'],
+    speciesScope: { query: ['小麦族'] },
+    hardExcludes: [{ rule: '按基因组区间取序列', blocks: ['sequence'], when: /区间|interval|坐标|chr\w*\s*[:：]\s*\d+\s*[-–~]\s*\d+/i }],
+    blindSpots: ['只支持按基因 ID 取序列', '上游可能重复返回同名序列，已去重并注明'],
+  },
+  {
+    tool: 'wheatomics_synteny',
+    sourceId: 'wheatomics',
+    intents: ['synteny'],
+    speciesScope: { query: ['小麦族'] },
+    blindSpots: [
+      '只覆盖默认表 CSsymaptbl（IWGSC RefSeq v1.1 / 01G 编号）；02G 单基因在该表查不到（实测），不是必须用区间',
+      '坐标为 Mb（上游 start_mb/end_mb），不是 bp',
+      '共线不等于同源或功能等价；0 条只表示该表本次无记录',
+    ],
+  },
+  {
+    tool: 'wheatomics_ppi',
+    sourceId: 'wheatomics',
+    intents: ['interaction'],
+    speciesScope: { query: ['小麦族'] },
+    blindSpots: [
+      '只给上游已有的 PPI 边；不推断方向、不把同源关系当互作',
+      'PPI_poppin（水稻网络转移）与 PPI_result（CF-MS 复合物图）收录范围不同；0 条不等于没有互作',
+    ],
+  },
+  {
+    tool: 'wheatomics_regulatory',
+    sourceId: 'wheatomics',
+    intents: ['tf'],
+    speciesScope: { query: ['小麦族'] },
+    blindSpots: ['只给调控区汇总（motif 命中数/最小 p 值），不展开逐条 motif 命中', '坐标字段是上游 0-based 命名'],
+  },
+  {
+    tool: 'wheatomics_enrichment',
+    sourceId: 'wheatomics',
+    intents: ['annotation'],
+    speciesScope: { query: ['小麦族'] },
+    blindSpots: [
+      '需要一组基因（1–50 个），不是单基因注释查询；也不做表达或变异富集',
+      'GO 实测约 23.5–26.0 s（POST 单次，不自动重试）；0 条显著不等于没有功能富集',
+    ],
+  },
+
+  // ---- string（蛋白互作；实测拟南芥 + 水稻）----
+  {
+    tool: 'string_resolve_ids',
+    sourceId: 'string',
+    intents: ['id-convert', 'gene-detail'],
+    speciesScope: { query: ['水稻', '拟南芥'] },
+    hardExcludes: [{ rule: '按基因名/性状检索', blocks: ['gene-search'], when: /按基因名|按基因名称|按名称|按性状|模糊/ }],
+    blindSpots: ['只把标识符解析成 STRING ID，不做注释或表达查询', '不传 species 时上游会跨物种乱解析，本工具强制要求 species'],
+  },
+  {
+    tool: 'string_interaction_partners',
+    sourceId: 'string',
+    intents: ['interaction'],
+    speciesScope: { query: ['水稻', '拟南芥'] },
+    blindSpots: [
+      '只给"实验或预测的蛋白互作伙伴"；**不含**同源家族成员、通路上下游方向、共表达关系与转录因子调控',
+      'score 缺失显示"未提供"，不倒成 0',
+      '不接 /api/json/interactions（只处理单标识符单物种）',
+    ],
+  },
+
+  // ---- strawberry（草莓及相关病原）----
+  { tool: 'strawberry_catalog', sourceId: 'strawberry', intents: ['catalog'], speciesScope: { query: ['草莓及相关病原'] }, blindSpots: STRAW_BLIND },
+  { tool: 'strawberry_gene_lookup', sourceId: 'strawberry', intents: ['gene-detail'], speciesScope: { query: ['草莓及相关病原'] }, hardExcludes: [{ rule: '模糊搜索', blocks: ['gene-search', 'catalog'], when: /模糊/ }], blindSpots: ['按精确 geneId 查，不做模糊搜索'] },
+  { tool: 'strawberry_expression', sourceId: 'strawberry', intents: ['expression'], speciesScope: { query: ['草莓'] }, blindSpots: STRAW_BLIND },
+  { tool: 'strawberry_synteny', sourceId: 'strawberry', intents: ['synteny'], speciesScope: { query: ['草莓'] }, blindSpots: ['共线不等于同源；仅已证实装配'] },
+  { tool: 'strawberry_tf_members', sourceId: 'strawberry', intents: ['tf'], speciesScope: { query: ['草莓属（Fragaria）'] }, blindSpots: ['TF 成员仅覆盖 Fragaria'] },
+
+  // ---- gwh（按精确 ID）----
+  { tool: 'gwh_assembly_lookup', sourceId: 'gwh', intents: ['assembly'], speciesScope: { query: ['不限物种（按精确 ID）'] }, hardExcludes: [
+      { rule: '按物种/关键词检索', blocks: ['gene-search', 'catalog'], when: /按物种|按关键词|关键词|搜索|检索|按名称/ },
+      { rule: '按基因区间检索', blocks: ['variant', 'annotation'], when: /区间|interval|坐标|chr\w*\s*[:：]\s*\d+\s*[-–~]\s*\d+/i },
+    ], blindSpots: GWH_BLIND },
+  { tool: 'gwh_project_sample_lookup', sourceId: 'gwh', intents: ['sample'], speciesScope: { query: ['不限物种（按精确 ID）'] }, hardExcludes: [
+      { rule: '按物种/关键词检索', blocks: ['gene-search', 'catalog'], when: /按物种|按关键词|关键词|搜索|检索|按名称/ },
+      { rule: '按基因区间检索', blocks: ['variant', 'annotation'], when: /区间|interval|坐标|chr\w*\s*[:：]\s*\d+\s*[-–~]\s*\d+/i },
+    ], blindSpots: GWH_BLIND },
+
+  // ---- icg（示例非承诺：仅实测玉米）----
+  { tool: 'icg_lookup', sourceId: 'icg', intents: ['reference-gene'], speciesScope: { query: ['玉米'] }, hardExcludes: [{ rule: '按基因名/性状检索', blocks: ['gene-search', 'gene-detail', 'catalog'], when: /按基因名|按基因名称|按名称|按性状|模糊/ }], blindSpots: [...ICG_BLIND, '不作通用推荐'] },
+  { tool: 'icg_species_list', sourceId: 'icg', intents: ['catalog'], speciesScope: { query: ['玉米'] }, hardExcludes: [{ rule: '按基因名/性状检索', blocks: ['gene-search', 'gene-detail', 'catalog'], when: /按基因名|按基因名称|按名称|按性状|模糊/ }], blindSpots: ICG_BLIND },
+
+  // ---- ic4r（粳稻）----
+  { tool: 'ic4r_gene', sourceId: 'ic4r', intents: ['gene-detail'], speciesScope: { query: ['水稻'] }, hardExcludes: [
+      { rule: '按基因名检索', blocks: ['gene-search'], when: /按基因名|按基因名称|按名称|按性状|模糊/ },
+      { rule: '按基因组区间检索', blocks: ['variant', 'annotation', 'sequence'], when: /区间|interval|坐标|chr\w*\s*[:：]\s*\d+\s*[-–~]\s*\d+/i },
+    ], blindSpots: IC4R_BLIND },
+  { tool: 'ic4r_annotation', sourceId: 'ic4r', intents: ['annotation'], speciesScope: { query: ['水稻'] }, hardExcludes: [
+      { rule: '按基因名检索', blocks: ['gene-search'], when: /按基因名|按基因名称|按名称|按性状|模糊/ },
+      { rule: '按基因组区间检索', blocks: ['variant', 'annotation', 'sequence'], when: /区间|interval|坐标|chr\w*\s*[:：]\s*\d+\s*[-–~]\s*\d+/i },
+    ], blindSpots: IC4R_BLIND },
+  { tool: 'ic4r_circrna', sourceId: 'ic4r', intents: ['circrna'], speciesScope: { query: ['水稻'] }, hardExcludes: [
+      { rule: '按基因名检索', blocks: ['gene-search'], when: /按基因名|按基因名称|按名称|按性状|模糊/ },
+      { rule: '按基因组区间检索', blocks: ['variant', 'annotation', 'sequence'], when: /区间|interval|坐标|chr\w*\s*[:：]\s*\d+\s*[-–~]\s*\d+/i },
+    ], blindSpots: IC4R_BLIND },
+  { tool: 'ic4r_lncrna', sourceId: 'ic4r', intents: ['lncrna'], speciesScope: { query: ['水稻'] }, hardExcludes: [
+      { rule: '按基因名检索', blocks: ['gene-search'], when: /按基因名|按基因名称|按名称|按性状|模糊/ },
+      { rule: '按基因组区间检索', blocks: ['variant', 'annotation', 'sequence'], when: /区间|interval|坐标|chr\w*\s*[:：]\s*\d+\s*[-–~]\s*\d+/i },
+    ], blindSpots: IC4R_BLIND },
+  { tool: 'ic4r_id_convert', sourceId: 'ic4r', intents: ['id-convert'], speciesScope: { query: ['水稻'] }, hardExcludes: [
+      { rule: '按基因名检索', blocks: ['gene-search'], when: /按基因名|按基因名称|按名称|按性状|模糊/ },
+      { rule: '按基因组区间检索', blocks: ['variant', 'annotation', 'sequence'], when: /区间|interval|坐标|chr\w*\s*[:：]\s*\d+\s*[-–~]\s*\d+/i },
+    ], blindSpots: [...IC4R_BLIND, 'ID 映射只承诺已测方向（IC4R locus → MSU/RAP-DB）'] },
+  { tool: 'ic4r_gene_list', sourceId: 'ic4r', intents: ['gene-search', 'catalog'], speciesScope: { query: ['水稻'] }, hardExcludes: [
+      { rule: '按基因名检索', blocks: ['gene-search'], when: /按基因名|按基因名称|按名称|按性状|模糊/ },
+      { rule: '按基因组区间检索', blocks: ['variant', 'annotation', 'sequence'], when: /区间|interval|坐标|chr\w*\s*[:：]\s*\d+\s*[-–~]\s*\d+/i },
+    ], blindSpots: [...IC4R_BLIND, '按染色体分页列 locus，不是按名称搜索'] },
+
+  { tool: 'ic4r_bulk_download', sourceId: 'ic4r', intents: ['sequence', 'annotation'], speciesScope: { query: ['水稻'] }, blindSpots: [
+      ...IC4R_BLIND,
+      '整文件下载到本地缓存，正文只回 manifest，不把序列放进上下文；需要本地读取落盘文件',
+      '只提供官方整文件（蛋白 / GFF / CDS），不是按基因或区间检索',
+    ] },
+
+  // ---- scod（甘蔗，T2 实测两端点）----
+  { tool: 'scod_genome_list', sourceId: 'scod', intents: ['catalog'], speciesScope: { query: ['甘蔗'] }, blindSpots: ['只覆盖甘蔗（Saccharum spontaneum）及相关材料，不是主粮'] },
+  {
+    tool: 'scod_gene_region',
+    sourceId: 'scod',
+    intents: ['gene-search'],
+    speciesScope: { query: ['甘蔗'] },
+    blindSpots: ['区间要覆盖整个基因才返回；0 条不等于该位置没有基因', '本地限制 length ≤ 50'],
+  },
+
+  // ---- gramene（实测水稻）----
+  { tool: 'gramene_search', sourceId: 'gramene', intents: ['gene-search'], speciesScope: { query: ['水稻', '籼稻'] }, hardExcludes: [{ rule: '按字段精确过滤', blocks: ['variant'], when: /按字段|精确过滤|字段过滤/ }], blindSpots: GRAMENE_BLIND },
+  { tool: 'gramene_gene', sourceId: 'gramene', intents: ['gene-detail'], speciesScope: { query: ['水稻', '籼稻'] }, hardExcludes: [{ rule: '按字段精确过滤', blocks: ['variant'], when: /按字段|精确过滤|字段过滤/ }], blindSpots: GRAMENE_BLIND },
+  { tool: 'gramene_expression', sourceId: 'gramene', intents: ['expression'], speciesScope: { query: ['水稻', '籼稻'] }, hardExcludes: [{ rule: '按字段精确过滤', blocks: ['variant'], when: /按字段|精确过滤|字段过滤/ }], blindSpots: GRAMENE_BLIND },
+  { tool: 'gramene_taxonomy', sourceId: 'gramene', intents: ['taxonomy'], speciesScope: { query: ['水稻', '籼稻'] }, hardExcludes: [{ rule: '按字段精确过滤', blocks: ['variant'], when: /按字段|精确过滤|字段过滤/ }], blindSpots: GRAMENE_BLIND },
+
+  // ---- ensemblplants（实测四物种：拟南芥/水稻/小麦/玉米）----
+  {
+    tool: 'ensemblplants_lookup_gene',
+    sourceId: 'ensemblplants',
+    intents: ['gene-detail'],
+    speciesScope: { query: ['拟南芥', '水稻', '小麦', '玉米'] },
+    blindSpots: [...ENSEMBL_BLIND, '按符号或基因 ID 精确查单个基因，不做模糊/批量搜索，也不返回序列或外链 ID'],
+  },
+  {
+    tool: 'ensemblplants_sequence',
+    sourceId: 'ensemblplants',
+    intents: ['sequence'],
+    speciesScope: { query: ['拟南芥', '水稻', '小麦', '玉米'] },
+    hardExcludes: [{ rule: '按基因组区间取序列', blocks: ['sequence'], when: /区间|interval|坐标|chr\w*\s*[:：]\s*\d+\s*[-–~]\s*\d+/i }],
+    blindSpots: [
+      ...ENSEMBL_BLIND,
+      '只接 genomic（bp）与 protein（aa）；cdna/cds 未开放，不拼接多条转录本',
+      '序列接口无 species 字段，转录本物种靠前置 lookup 核验，属已知残余风险',
+    ],
+  },
+  {
+    tool: 'ensemblplants_xrefs',
+    sourceId: 'ensemblplants',
+    intents: ['id-convert'],
+    speciesScope: { query: ['拟南芥', '水稻', '小麦', '玉米'] },
+    blindSpots: [...ENSEMBL_BLIND, '映射接口既无物种也无组装字段，靠前置 lookup 核验；不按数据库过滤，不保证某库一定有条目'],
+  },
+  {
+    tool: 'ensemblplants_homology',
+    sourceId: 'ensemblplants',
+    intents: ['homolog'],
+    speciesScope: { query: ['拟南芥', '水稻', '小麦', '玉米'], target: ['拟南芥'] },
+    blindSpots: [
+      ...ENSEMBL_BLIND,
+      '目标物种目前只开放拟南芥（G5 实测方向：水稻→拟南芥）；正文最多 10 条，完整记录在 structuredContent',
+      '不返回比对序列（align_seq 已裁剪），也不按基因符号查',
+    ],
+  },
+  {
+    tool: 'ensemblplants_reference_proteome',
+    sourceId: 'ensemblplants',
+    intents: ['sequence', 'assembly'],
+    speciesScope: { query: ['拟南芥', '水稻'] },
+    blindSpots: [
+      ...ENSEMBL_BLIND,
+      '参考蛋白整文件只覆盖 release 57 的拟南芥 TAIR10 与水稻 IRGSP-1.0 基线；其它物种要显式给 assembly，且没有条数基线',
+      '只落盘整文件并返回 manifest，不把序列放进正文，也不按基因 ID 查单条序列',
+    ],
+  },
+  // ---- interpro（参考数据集：域模型 HMM，不按物种覆盖）----
+  {
+    tool: 'interpro_get_hmm',
+    sourceId: 'interpro',
+    intents: ['annotation'],
+    speciesScope: {},
+    blindSpots: INTERPRO_BLIND,
+  },
+
+  // ---- uniprot（实测四物种；口径 2026-11-03 由 plantomics维护者定，维护者转达）----
+  // 注意：`speciesScope` 用 `speciesSatisfies` 认得的**中文规范名**（同 ensemblplants），
+  // 不要抄 `manifest.species` 里的拉丁串（Arabidopsis thaliana / …），否则正好造成"物种口径漂移"。
+  // 不新增意图 id：按名找=gene-search、按 ID 取=gene-detail、注释=annotation；
+  // **不声明 interaction**——互作只属 STRING（`test/interaction-intent.test.ts` 会拦）。
+  {
+    tool: 'uniprot_search_proteins',
+    sourceId: 'uniprot',
+    intents: ['gene-search'],
+    speciesScope: { query: ['拟南芥', '小麦', '水稻', '玉米'] },
+    blindSpots: ['只按蛋白名/基因名与关键词全文检索', '不按基因组区间、不按物种全库浏览', '命中数受上游分页限制'],
+  },
+  {
+    tool: 'uniprot_get_entry',
+    sourceId: 'uniprot',
+    intents: ['gene-detail', 'annotation'],
+    speciesScope: { query: ['拟南芥', '小麦', '水稻', '玉米'] },
+    blindSpots: ['按 accession 精确取，不做模糊匹配', '注释以 UniProt 条目为准，不与源库注释合并'],
+  },
+];
+
+/** 该物种能否满足某个 scope 写法（如 小麦 满足 小麦族）。 */
+export function speciesSatisfies(species: string, scope: string): boolean {
+  if (scope === '不限物种（按精确 ID）') return true;
+  return (SPECIES_SATISFIES[species] ?? []).includes(scope);
+}
+
+/** 在归一化文本里找出所有物种，按出现位置升序。`end` 用于判断它后面的方向标记。 */
+export function detectSpecies(normalized: string): Array<{ species: string; index: number; end: number }> {
+  const found: Array<{ species: string; index: number; end: number }> = [];
+  for (const [species, aliases] of Object.entries(SPECIES_ALIASES)) {
+    let best: { index: number; end: number } | undefined;
+    for (const alias of aliases) {
+      const at = normalized.indexOf(alias);
+      if (at >= 0 && (!best || at < best.index)) best = { index: at, end: at + alias.length };
+    }
+    if (best) found.push({ species, ...best });
+  }
+  return found.sort((a, b) => a.index - b.index);
+}
+
+/** 在归一化文本里命中哪些意图。 */
+export function detectIntents(normalized: string): IntentId[] {
+  const hit: IntentId[] = [];
+  for (const spec of INTENTS) {
+    if (spec.keywords.some((word) => normalized.includes(word))) hit.push(spec.id);
+  }
+  return hit;
+}

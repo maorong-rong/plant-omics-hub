@@ -1,0 +1,21 @@
+{
+  "capture": {
+    "url": "https://wheatomics.sdau.edu.cn/api/go",
+    "at": "2026-11-11T02:59:29.500137Z",
+    "capturedAt": "2026-11-11T02:59:31.173381Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 45,
+    "sourceSha256": "DEEC874A0759D6B1F9465CE6CC4A54B46D506D2111CE0321963C7015C825B79F",
+    "rawBodySource": "re-collected",
+    "simulated": false,
+    "note": "真实抓取 2026-11-11；4 个 03G 基因直送 GO 富集回 HTTP 200 + N=73626 + n=0 + results=[]（45 B，1.2 s）。复现 #75 的静默 0：同批基因换 02G+.1 后有结果；03G 是代次不支持，不是没有 GO 注释"
+  },
+  "rawBody": "{\"N\":73626,\"n\":0,\"results\":[],\"gene_count\":4}",
+  "payload": {
+    "N": 73626,
+    "n": 0,
+    "results": [],
+    "gene_count": 4
+  }
+}

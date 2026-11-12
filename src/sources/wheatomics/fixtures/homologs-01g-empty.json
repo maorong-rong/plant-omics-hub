@@ -1,0 +1,25 @@
+{
+  "capture": {
+    "url": "https://wheatomics.sdau.edu.cn/api/homologs/wheat-rice-arabidopsis?gene_id=TraesCS1A01G018500LC&max_targets=3",
+    "at": "2026-11-11T02:59:27.203745Z",
+    "capturedAt": "2026-11-11T02:59:29.200854Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 143,
+    "sourceSha256": "397E33779563F93C47F05C8A7DE4EE4E4FC3BC7E75A2BE2B4DAB37DE1AF0ED93",
+    "rawBodySource": "re-collected",
+    "simulated": false,
+    "note": "真实抓取 2026-11-11；01G 单基因回 200 + count=0 + hits=[]（143 B）。同源端点只实测过 02G 正例与 03G 全 0，01G 代次支持未声明——用于零值诊断 unknown 情形，不推断原因"
+  },
+  "rawBody": "{\"success\":true,\"message\":\"ok\",\"timestamp\":\"2026-11-11T02:59:29.199900+00:00\",\"data\":{\"query_gene\":\"TraesCS1A01G018500LC\",\"count\":0,\"hits\":[]}}",
+  "payload": {
+    "success": true,
+    "message": "ok",
+    "timestamp": "2026-11-11T02:59:29.199900+00:00",
+    "data": {
+      "query_gene": "TraesCS1A01G018500LC",
+      "count": 0,
+      "hits": []
+    }
+  }
+}

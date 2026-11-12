@@ -1,0 +1,1650 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { describe, expect, it } from 'vitest';
+
+import { utf8Bytes } from '../src/core/format.js';
+import { InvalidArgumentError, UpstreamError } from '../src/core/errors.js';
+import type { Fetcher, ToolContext } from '../src/core/types.js';
+import { tools } from '../src/sources/wheatomics/tools.js';
+import { diagnoseZero, renderZeroDiagnosis } from '../src/sources/wheatomics/diagnosis.js';
+
+/**
+ * 离线回放测试。
+ *
+ * 刻意**不联网**：联网测试会因为上游改版、机房抖动、代理没开而红，
+ * 红了三次之后人就开始 `--skip`，最后等于没有测试。
+ * 「上游还活着吗」由 `npm run probe` 单独回答，两者职责分开。
+ */
+const FIXTURE_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'src',
+  'sources',
+  'wheatomics',
+  'fixtures',
+);
+
+function readFixture(name: string): unknown {
+  return JSON.parse(readFileSync(join(FIXTURE_DIR, name), 'utf8'));
+}
+
+function contextFor(fixture: string): { ctx: ToolContext; urls: string[] } {
+  const urls: string[] = [];
+  const body = readFixture(fixture);
+  const http = (async (url: string) => {
+    urls.push(url);
+    return { data: body, url, status: 200, durationMs: 12, attempts: 1 };
+  }) as Fetcher;
+  return { ctx: { http }, urls };
+}
+
+function contextWith(payload: unknown): { ctx: ToolContext; urls: string[] } {
+  const urls: string[] = [];
+  const http = (async (url: string) => {
+    urls.push(url);
+    return { data: payload, url, status: 200, durationMs: 7, attempts: 1 };
+  }) as Fetcher;
+  return { ctx: { http }, urls };
+}
+
+function tool(nam: string) {
+  const found = tools.find((candidate) => candidate.name === nam);
+  if (!found) throw new Error(`注册表里没有 ${nam}`);
+  return found;
+}
+
+/** 数 markdown 表格里的数据行（跳过表头与分隔行）。 */
+function dataRows(text: string): number {
+  const tableLines = text.split('\n').filter((line) => line.trim().startsWith('|'));
+  return Math.max(0, tableLines.length - 2);
+}
+
+describe('wheatomics 工具', () => {
+  it('每个工具名都以源 id 为前缀，且参数是 object schema', () => {
+    expect(tools).toHaveLength(15);
+    for (const def of tools) {
+      expect(def.name.startsWith('wheatomics_')).toBe(true);
+      expect(def.parameters.type).toBe('object');
+      expect(def.parameters.additionalProperties).toBe(false);
+      expect(def.description.length).toBeGreaterThan(10);
+    }
+  });
+
+  it('search_known_genes：命中条目，出处带完整查询与时刻（审查 R06）', async () => {
+    const { ctx, urls } = contextFor('known-search.json');
+    const result = await tool('wheatomics_search_known_genes').run({ searchid: 'VRN1' }, ctx);
+
+    expect(urls[0]).toContain('/genes/known/search');
+    expect(urls[0]).toContain('searchid=VRN1');
+    expect(result.text).toContain('源：小麦多组学平台（WheatOmics）');
+    // 出处必须能复现这次查询：带参数、带时刻
+    expect(result.text).toContain('searchid=VRN1');
+    expect(result.text).toMatch(/HTTP 200/);
+    expect(result.meta.request).toContain('searchid=VRN1');
+    expect(result.meta.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('search_known_genes：limit 真的决定渲染行数（原断言是永真的）', async () => {
+    const fixture = readFixture('known-search.json') as { data: { records: unknown[] } };
+    const total = fixture.data.records.length;
+
+    const { ctx: ctx2 } = contextFor('known-search.json');
+    const two = await tool('wheatomics_search_known_genes').run({ searchid: 'VRN1', limit: 2 }, ctx2);
+    expect(dataRows(two.text)).toBe(2);
+
+    const { ctx: ctxAll } = contextFor('known-search.json');
+    const all = await tool('wheatomics_search_known_genes').run({ searchid: 'VRN1', limit: 50 }, ctxAll);
+    expect(dataRows(all.text)).toBe(total);
+  });
+
+  it('gene_detail：路径参数被正确编码，且不猜分子量单位', async () => {
+    const { ctx, urls } = contextFor('gene-detail.json');
+    const result = await tool('wheatomics_gene_detail').run({ gene_id: 'TraesCS5A02G391700' }, ctx);
+
+    expect(urls[0]).toContain('/genes/detail/TraesCS5A02G391700');
+    expect(result.text).toContain('TraesCS5A02G391700');
+    expect(result.text).toContain('单位未标注');
+  });
+
+  it('expression_projects：600 KB 级响应被压成 group 汇总，且按字节不超预算', async () => {
+    const { ctx } = contextFor('expression-projects.json');
+    const result = await tool('wheatomics_expression_projects').run({}, ctx);
+
+    expect(result.text).toContain('按 group 汇总');
+    expect(utf8Bytes(result.text)).toBeLessThanOrEqual(4096);
+  });
+
+  it('expression_projects：keyword 能筛出具体项目 id', async () => {
+    const { ctx } = contextFor('expression-projects.json');
+    const result = await tool('wheatomics_expression_projects').run({ keyword: 'ABA' }, ctx);
+    expect(result.text).toContain('按关键词「ABA」匹配');
+  });
+
+  it('expression_query：条件不多时**全部展示**，籽粒条件不许被裁掉（审查 R02）', async () => {
+    const { ctx, urls } = contextFor('expression-query.json');
+    const result = await tool('wheatomics_expression_query').run(
+      { gene_ids: 'TraesCS5A02G391700', project: 'PRJEB5314_paired_tbl' },
+      ctx,
+    );
+
+    expect(urls[0]).toContain('gene_ids=TraesCS5A02G391700');
+    expect(urls[0]).toContain('project=PRJEB5314_paired_tbl');
+    // 真实 fixture 里 grain_Z71 / Z75 / Z85 排在最后，原实现 slice(0,12) 把它们全裁了
+    expect(result.text).toContain('grain_Z71');
+    expect(result.text).toContain('grain_Z75');
+    expect(result.text).toContain('grain_Z85');
+    expect(result.text).toContain('共 15 个条件');
+  });
+
+  it('expression_query：标准差必须出现在输出里（描述承诺过）', async () => {
+    const { ctx } = contextFor('expression-query.json');
+    const result = await tool('wheatomics_expression_query').run(
+      { gene_ids: 'TraesCS5A02G391700' },
+      ctx,
+    );
+    // fixture 里 stem_Z65 = 53.2364 ± 0.342734
+    expect(result.text).toContain('stem_Z65=53.236±0.343');
+  });
+
+  it('expression_query：condition 只看籽粒条件', async () => {
+    const { ctx } = contextFor('expression-query.json');
+    const result = await tool('wheatomics_expression_query').run(
+      { gene_ids: 'TraesCS5A02G391700', condition: 'grain' },
+      ctx,
+    );
+    expect(result.text).toContain('含「grain」的 3 个条件');
+    expect(result.text).not.toContain('stem_Z65');
+  });
+
+  it('expression_query：缺值不许渲染成 0（审查 P1：编造数据）', async () => {
+    const payload = {
+      success: true,
+      data: {
+        project: 'demo',
+        genes_found: 1,
+        results: [
+          {
+            gene_id: 'G1',
+            points: [
+              { label: 'a', value: null, std: null },
+              { label: 'b', value: 5, std: undefined },
+            ],
+          },
+        ],
+      },
+    };
+    const { ctx } = contextWith(payload);
+    const result = await tool('wheatomics_expression_query').run({ gene_ids: 'G1' }, ctx);
+
+    expect(result.text).toContain('a=-');
+    expect(result.text).not.toContain('a=0');
+    expect(result.text).toContain('b=5');
+    expect(result.text).not.toContain('b=5±0');
+  });
+
+  it('expression_query：50 个基因时正文只给摘要，不再吃 4 KB 截断，完整矩阵进 structuredContent', async () => {
+    const longLabel = 'x'.repeat(40);
+    const results = Array.from({ length: 50 }, (_, g) => ({
+      gene_id: `G${g}`,
+      points: Array.from({ length: 5 }, (_, p) => ({ label: `${longLabel}${p}`, value: p, std: 1 })),
+    }));
+    const { ctx } = contextWith({ success: true, data: { project: 'demo', genes_found: 50, results } });
+    const result = await tool('wheatomics_expression_query').run({ gene_ids: 'G0' }, ctx);
+
+    expect(utf8Bytes(result.text)).toBeLessThanOrEqual(4096);
+    // 正文只给摘要：不再出现「已按 4 KB 上限截断」这种丢数据的提示
+    expect(result.text).not.toContain('已按 4 KB 上限截断');
+    const omitted = /正文只展示前 (\d+) 个基因，另有 (\d+) 个基因的完整矩阵在 structuredContent/.exec(result.text);
+    expect(omitted).not.toBeNull();
+    expect(Number(omitted![1]) + Number(omitted![2])).toBe(50);
+    expect(result.text).toContain('源：小麦多组学平台（WheatOmics）'); // 出处不许被截掉
+    // 完整矩阵：行=基因、列=条件、逐点 mean/std/status
+    expect(result.structured?.conditions).toEqual(Array.from({ length: 5 }, (_, p) => `${longLabel}${p}`));
+    const rows = result.structured?.rows as Array<{ gene_id: string; values: Array<{ label: string; mean: number | null; status: string }> }>;
+    expect(rows).toHaveLength(50);
+    expect(rows[49].gene_id).toBe('G49');
+    expect(rows[0].values[4]).toEqual({ label: `${longLabel}4`, mean: 4, std: 1, status: 'measured' });
+  });
+
+  it('expression_query：0 与「未测量」必须能区分（status 三态），不许把 0 当未测、也不许当测得 0', async () => {
+    const payload = {
+      success: true,
+      data: {
+        project: 'demo',
+        genes_found: 3,
+        results: [
+          { gene_id: 'G1', points: [{ label: 'a', value: 0, std: 0 }, { label: 'b', value: 5, std: 1 }] },
+          { gene_id: 'G2', points: [{ label: 'a', value: 0, std: 0.4 }, { label: 'b', value: 7, std: 1 }] },
+          { gene_id: 'G3', points: [{ label: 'a', value: 3, std: 0.2 }] },
+        ],
+      },
+    };
+    const { ctx } = contextWith(payload);
+    const result = await tool('wheatomics_expression_query').run({ gene_ids: 'G1,G2,G3' }, ctx);
+    const rows = result.structured?.rows as Array<{ gene_id: string; values: Array<{ label: string; status: string }> }>;
+    const byGene = new Map(rows.map((row) => [row.gene_id, row.values]));
+
+    // a=0 且 std=0：上游不区分「测得 0」与「未测量」→ zero_or_unmeasured（未知），既不是 measured 也不是 missing
+    expect(byGene.get('G1')?.find((v) => v.label === 'a')?.status).toBe('zero_or_unmeasured');
+    // a=0 但 std>0：有离散度，说明是测得的 0
+    expect(byGene.get('G2')?.find((v) => v.label === 'a')?.status).toBe('measured');
+    // G3 没有 b 条件：missing（不是 0、不是 zero_or_unmeasured）
+    expect(byGene.get('G3')?.find((v) => v.label === 'b')?.status).toBe('missing');
+    expect(result.structured?.unit).toEqual({ value: null, note: expect.stringContaining('上游未逐点标注单位') });
+    expect(result.text).toContain('零或未测');
+  });
+
+  it('search_papers：sinceDays 映射成上游的 since_days 参数', async () => {
+    const { ctx, urls } = contextFor('papers.json');
+    const result = await tool('wheatomics_search_papers').run({ q: 'vernalization', limit: 3, sinceDays: 30 }, ctx);
+
+    expect(urls[0]).toContain('q=vernalization');
+    expect(urls[0]).toContain('since_days=30');
+    expect(result.text).toContain('| PMID |');
+  });
+
+  it('convert_gene_ids：多个 ID 用 CRLF 分隔送出', async () => {
+    const { ctx, urls } = contextFor('id-conversion.json');
+    const result = await tool('wheatomics_convert_gene_ids').run(
+      { ids: 'TraesCS6B01G342500.1, TraesCS6B01G123400.1', gene_version: 'IWGSCv1_result' },
+      ctx,
+    );
+
+    expect(urls[0]).toContain('gene_version=IWGSCv1_result');
+    expect(urls[0]).toContain('%0D%0A');
+    expect(result.text).toContain('TraesCS6B02G342500');
+  });
+
+  it('convert_gene_ids：非法 gene_version 直接拒绝，不发请求', async () => {
+    const { ctx, urls } = contextFor('id-conversion.json');
+    await expect(
+      tool('wheatomics_convert_gene_ids').run({ ids: 'X.1', gene_version: 'v9' }, ctx),
+    ).rejects.toThrow(/gene_version/);
+    expect(urls).toHaveLength(0);
+  });
+
+  it('convert_gene_ids：单次 ID 数超上限时本地拒掉，不发请求', async () => {
+    const { ctx, urls } = contextFor('id-conversion.json');
+    const tooMany = Array.from({ length: 201 }, (_, i) => `T${i}.1`).join(',');
+    await expect(
+      tool('wheatomics_convert_gene_ids').run({ ids: tooMany, gene_version: 'IWGSCv1_result' }, ctx),
+    ).rejects.toThrow(/最多 200 个/);
+    expect(urls).toHaveLength(0);
+  });
+
+  it('上游 success=false 时抛错而不是返回空表', async () => {
+    const { ctx } = contextWith({ success: false, message: '表不存在', data: null });
+    await expect(tool('wheatomics_expression_projects').run({}, ctx)).rejects.toThrow(/success=false/);
+  });
+
+  it('上游换字段名时明确报契约错误，而不是说「没有匹配」（审查 R03 / A3）', async () => {
+    const { ctx } = contextWith({ success: true, data: { items: [{ gene_id: 'REAL_MATCH' }] } });
+    await expect(
+      tool('wheatomics_search_known_genes').run({ searchid: 'VRN1' }, ctx),
+    ).rejects.toThrow(/records/);
+  });
+
+  it('上游明确返回 0 条时，文案要说清「是 0 条，不是解析失败」', async () => {
+    const { ctx } = contextWith({ success: true, data: { query: 'X', total: 0, records: [] } });
+    const result = await tool('wheatomics_search_known_genes').run({ searchid: 'X' }, ctx);
+    expect(result.text).toContain('上游明确返回 0 条');
+  });
+});
+
+// ── 2026-10-29 新增三工具（契约见 fixtures/README.md） ─────
+//
+// 注意：这三个工具的 fixture 是**结构回放件**（capture.simulated = true），
+// 落地时上游 /api/* 返回 503 + Apache 维护页，无法保存原始响应体。
+// 所以本节证明的是「我们的解析与排版自洽」，**不是**上游契约已被快照钉住。
+
+interface ReplayFixture {
+  capture: { url: string; simulated?: boolean; originalBytes?: number };
+  payload: unknown;
+}
+
+/** 读取带 capture 包装的回放件，只回放 payload 部分。 */
+function replayFixture(name: string): ReplayFixture {
+  return JSON.parse(readFileSync(join(FIXTURE_DIR, name), 'utf8')) as ReplayFixture;
+}
+
+function replay(
+  name: string,
+  options: { mutate?: (payload: Record<string, unknown>) => void } = {},
+): { ctx: ToolContext; urls: string[]; data: ReplayFixture } {
+  const data = replayFixture(name);
+  const payload = JSON.parse(JSON.stringify(data.payload)) as Record<string, unknown>;
+  if (options.mutate) options.mutate(payload);
+  const urls: string[] = [];
+  const http = (async (url: string) => {
+    urls.push(url);
+    return { data: payload, url, status: 200, durationMs: 11, attempts: 1 };
+  }) as Fetcher;
+  return { ctx: { http }, urls, data };
+}
+
+/** 回放一个**非 200**状态，用于验证 HTTP 错误不被折成业务空结果。 */
+function replayStatus(name: string, status: number): { ctx: ToolContext; urls: string[] } {
+  const data = replayFixture(name);
+  const urls: string[] = [];
+  const http = (async (url: string) => {
+    urls.push(url);
+    throw new UpstreamError(`上游HTTP ${status}`, { url, status, attempts: 1 });
+  }) as Fetcher;
+  return { ctx: { http }, urls };
+}
+
+describe('缺值不许显示成 0（2026-11-01，与 STRING 的 score:null 同一纪律）', () => {
+  it('头部计数字段为 null 时显示「未提供」，不是 0', async () => {
+    // 旧实现 num(null) → Number(null) === 0 → 头部写成"找到基因 0 个"，
+    // 与"上游没给这个数"语义相反（0 是确证为零，null 是未知）。
+    const payload = JSON.parse(readFileSync(join(FIXTURE_DIR, 'expression-query.json'), 'utf8')) as {
+      data: Record<string, unknown>;
+    };
+    payload.data.genes_found = null;
+    const http = (async (url: string) => ({ data: payload, url, status: 200, durationMs: 7, attempts: 1 })) as Fetcher;
+
+    const out = await tool('wheatomics_expression_query').run(
+      { gene_ids: 'TraesCS5A02G391700', project: 'PRJEB5314_paired_tbl', top: 3 }, { http },
+    );
+    expect(out.text).toMatch(/找到基因\s*未提供/);
+    expect(out.text).not.toMatch(/找到基因\s*0\s*个/);
+  });
+});
+
+describe('wheatomics_cross_species_homologs', () => {
+  it('正例：1 次请求、按物种分组、max_targets 写清是每物种上限', async () => {
+    const { ctx, urls } = replay('homologs.json');
+    const result = await tool('wheatomics_cross_species_homologs').run(
+      { gene_id: 'TraesCS5A02G391700', max_targets: 3 },
+      ctx,
+    );
+
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain('/homologs/wheat-rice-arabidopsis');
+    expect(urls[0]).toContain('gene_id=TraesCS5A02G391700');
+    expect(urls[0]).toContain('max_targets=3');
+
+    expect(result.text).toContain('命中 6 条同源基因');
+    expect(result.text).toContain('Rice 3');
+    expect(result.text).toContain('Arabidopsis 3');
+    // 这条是本轮最容易写错的地方：max_targets 是每物种上限，不是总数
+    expect(result.text).toContain('每物种');
+    // 不区分直系/旁系，必须在正文里说清，否则用户会当成 ortholog 用
+    expect(result.text).toContain('不区分直系/旁系同源');
+    expect(result.text).toContain('水稻与拟南芥');
+    expect(result.text).toContain('源：小麦多组学平台（WheatOmics）');
+    expect(result.meta.request).toContain('max_targets=3');
+  });
+
+  it('查无：count=0 是合法空结果，写明只覆盖两物种，不断言基因有无', async () => {
+    const { ctx } = replay('homologs-empty.json');
+    const result = await tool('wheatomics_cross_species_homologs').run({ gene_id: 'TraesCS9Z99G999999' }, ctx);
+
+    expect(result.text).toContain('本次返回 0 条');
+    expect(result.text).toContain('只覆盖水稻与拟南芥');
+    expect(result.text).toContain('不代表该基因没有同源基因');
+    // 只能是"不代表没有"，不能出现肯定式断言
+    expect(result.text).not.toMatch(/(?<!不代表)该基因没有同源基因/);
+  });
+
+  it('身份不符：返回的 query_gene 与请求不一致 → 抛错，不把无关记录当结果', async () => {
+    const { ctx } = replay('homologs.json', {
+      mutate: (payload) => {
+        (payload.data as Record<string, unknown>).query_gene = 'TraesCS1A02G000100';
+      },
+    });
+    await expect(
+      tool('wheatomics_cross_species_homologs').run({ gene_id: 'TraesCS5A02G391700' }, ctx),
+    ).rejects.toThrow(/身份不符/);
+  });
+
+  it('缺 query_gene → 结构漂移，不退化成空结果', async () => {
+    const { ctx } = replay('homologs.json', {
+      mutate: (payload) => {
+        delete (payload.data as Record<string, unknown>).query_gene;
+      },
+    });
+    await expect(
+      tool('wheatomics_cross_species_homologs').run({ gene_id: 'TraesCS5A02G391700' }, ctx),
+    ).rejects.toThrow(/query_gene/);
+  });
+
+  it('count 与 hits 条数矛盾 → 抛错，不挑一个当真值', async () => {
+    const { ctx } = replay('homologs.json', {
+      mutate: (payload) => {
+        (payload.data as Record<string, unknown>).count = 99;
+      },
+    });
+    await expect(
+      tool('wheatomics_cross_species_homologs').run({ gene_id: 'TraesCS5A02G391700' }, ctx),
+    ).rejects.toThrow(/自相矛盾/);
+  });
+
+  it('hits 缺失 → 结构漂移（不是「没有同源基因」）', async () => {
+    const { ctx } = replay('homologs.json', {
+      mutate: (payload) => {
+        delete (payload.data as Record<string, unknown>).hits;
+      },
+    });
+    await expect(
+      tool('wheatomics_cross_species_homologs').run({ gene_id: 'TraesCS5A02G391700' }, ctx),
+    ).rejects.toThrow(/hits/);
+  });
+
+  it('描述里不写「覆盖禾本科」这类未证实的覆盖范围', () => {
+    const def = tool('wheatomics_cross_species_homologs');
+    // 允许出现「不代表全部禾本科」这种**否定式**边界说明，禁止的是正向宣称
+    expect(def.description).toContain('只有水稻与拟南芥');
+    expect(def.description).toContain('不是全部物种');
+    expect(def.description).not.toMatch(/覆盖禾本科|全部物种都|全物种覆盖/);
+  });
+});
+
+describe('wheatomics_variant_datasets', () => {
+  it('正例：3 个参考基因组、29 个数据集、concordant 计数可算', async () => {
+    const { ctx, urls } = replay('variant-datasets.json');
+    const result = await tool('wheatomics_variant_datasets').run({}, ctx);
+
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain('/VariantHub/datasets');
+    expect(result.text).toContain('3 个参考基因组');
+    expect(result.text).toContain('29 个变异数据集');
+    // 真实抓取：27 个 true、2 个 false（WEC_filtered_SNPs / WEC_filtered_INDELs），无字段缺失。
+    // 我此前的合成件把比例写反了，这条断言按真实件钉住。
+    expect(result.text).toContain('genome_concordant=true 的 27 个');
+    expect(result.text).toContain('whealbi_minocc10');
+    expect(utf8Bytes(result.text)).toBeLessThanOrEqual(4096);
+  });
+
+  it('正文必须带「0 条不能解读为该区间没有变异」的警告，不能只写在描述里', async () => {
+    const { ctx } = replay('variant-datasets.json');
+    const result = await tool('wheatomics_variant_datasets').run({}, ctx);
+    expect(result.text).toContain('0 条不能解读为该区间没有变异');
+  });
+
+  it('keyword 是本地过滤：不发给上游，且能筛出目标数据集', async () => {
+    const { ctx, urls } = replay('variant-datasets.json');
+    const result = await tool('wheatomics_variant_datasets').run({ keyword: 'whealbi' }, ctx);
+
+    expect(urls[0]).not.toContain('keyword');
+    expect(result.text).toContain('本地关键词「whealbi」命中 1 个');
+    expect(result.text).toContain('该过滤不发给上游');
+  });
+
+  it('keyword 无命中时明说「本地过滤为空」，不报成上游没数据', async () => {
+    const { ctx } = replay('variant-datasets.json');
+    const result = await tool('wheatomics_variant_datasets').run({ keyword: 'ZZZ_NOT_A_DATASET' }, ctx);
+    expect(result.text).toContain('本地过滤结果为空');
+    expect(result.text).toContain('共 3 个参考基因组、29 个变异数据集');
+  });
+
+  it('references 缺失 → 结构漂移', async () => {
+    const { ctx } = replay('variant-datasets.json', {
+      mutate: (payload) => {
+        delete (payload.data as Record<string, unknown>).references;
+      },
+    });
+    await expect(tool('wheatomics_variant_datasets').run({}, ctx)).rejects.toThrow(/references/);
+  });
+
+  it('genome_concordant 字段缺失时显示「未知」，不默认成 true/false', async () => {
+    const { ctx } = replay('variant-datasets.json');
+    const result = await tool('wheatomics_variant_datasets').run({ keyword: 'WEC_filtered_SNPs' }, ctx);
+    // 该条实测为 false，必须照实显示
+    expect(result.text).toContain('false');
+  });
+});
+
+describe('wheatomics_variant_query', () => {
+  it('正例：total/total_shown/records 三者一致，正文不含 info_raw', async () => {
+    const { ctx, urls } = replay('variant-query.json');
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' },
+      ctx,
+    );
+
+    expect(urls).toHaveLength(1);
+    // region 是单个字符串参数，不是 chrom/start/end 三个
+    expect(urls[0]).toContain('region=chr1A%3A1-200000');
+    expect(urls[0]).not.toContain('start=');
+    expect(result.text).toContain('total=1');
+    expect(result.text).toContain('WTa_096d3b');
+    expect(result.text).toContain('downstream_gene_variant');
+    expect(result.text).not.toContain('info_raw');
+    // 已证实的是闭区间（端点都含）；1-based/0-based 不作为结论出现，只允许以"不涉及"的否定式提及
+    expect(result.text).toContain('闭区间');
+    expect(result.text).not.toMatch(/按 ?1-based|上游是 ?1-based|1-based 坐标/);
+    expect(utf8Bytes(result.text)).toBeLessThanOrEqual(4096);
+  });
+
+  it('VEP ANN 按标准字段序解析：取 Consequence 与 Gene，不把 Allele 当成 consequence', async () => {
+    // 这条是修正错误：ANN 原文是 Allele|Consequence|IMPACT|SYMBOL|Gene|...
+    // 曾按 parts[0..2] 取，得到「等位基因|consequence|impact」，基因 ID 被整个丢掉。
+    const { ctx } = replay('variant-query.json');
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' },
+      ctx,
+    );
+
+    expect(result.text).toContain('downstream_gene_variant');
+    expect(result.text).toContain('TraesCS1A02G000700');
+    // 等位基因 T 不能冒充 consequence
+    expect(result.text).not.toContain('T / ');
+    expect(result.text).not.toContain('T|downstream_gene_variant');
+  });
+
+  it('ANN 字段数不足 5 段 → 抛结构错，不按错位下标硬取', async () => {
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        const record = (data.records as Array<Record<string, unknown>>)[0]!;
+        (record.info as Record<string, unknown>).ANN = 'T|downstream_gene_variant';
+      },
+    });
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' }, ctx),
+    ).rejects.toThrow(/info\.ANN/);
+  });
+
+  it('点号占位显式标注：qual="." 显示为「.(未计算)」，不当成 0 或缺失', async () => {
+    const { ctx } = replay('variant-query.json');
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' },
+      ctx,
+    );
+    expect(result.text).toContain('.(未计算)');
+    expect(result.text).toContain('PASS');
+  });
+
+  it('samples 与 genotypes 一律不读：正文与 raw 都不出现逐样本数据', async () => {
+    // 实测这两块占单条响应 88.1%；只删 info_raw 是不够的（那样仍有约 9 KB）。
+    const { ctx } = replay('variant-query.json');
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' },
+      ctx,
+    );
+
+    expect(result.text).not.toContain('sample_placeholder_1');
+    expect(result.text).not.toContain('./.:.');
+    expect(result.text).toContain('n_samples=487'); // 只报数量
+
+    const raw = result.raw as { records: Array<Record<string, unknown>> };
+    const serialized = JSON.stringify(raw);
+    expect(serialized).not.toContain('sample_placeholder_1');
+    expect(serialized).not.toContain('./.:.');
+    expect(serialized).not.toContain('genotypes');
+    expect(serialized).not.toContain('info_raw');
+  });
+
+  it('40 条记录仍不超预算，且不因裁剪切掉出处尾注', async () => {
+    // 构造 40 条（远超 limit 默认值），验证 fitTable 逐行预算与出处共存
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        const first = (data.records as Array<Record<string, unknown>>)[0]!;
+        const many = Array.from({ length: 40 }, (_, i) => ({
+          ...first,
+          pos: 1000 + i * 100,
+          id: `WTa_test_${i}`,
+        }));
+        data.records = many;
+        data.total = 40;
+        data.total_shown = 40;
+      },
+    });
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000', limit: 40 },
+      ctx,
+    );
+
+    expect(utf8Bytes(result.text)).toBeLessThanOrEqual(4096);
+    expect(result.text).toContain('源：小麦多组学平台（WheatOmics）');
+    expect(result.text).toContain('HTTP 200');
+    // 未展示的条目必须如实计数，且不能出现负数
+    expect(result.text).not.toContain('另有 -');
+    // 三层计数 + 两个缺口的恒等式（WHT-01，负责人 2026-10-30 口径）
+    expect(result.text).toContain('命中 40 条；本次取回 40 条');
+    const shownMatch = /正文展示 (\d+) 条/.exec(result.text);
+    expect(shownMatch, '40 条超预算时必须写明正文展示数').not.toBeNull();
+    const shownN = Number(shownMatch![1]);
+    expect(shownN).toBeLessThan(40); // 确实被字节闸裁过
+    // 报出来的条数必须等于表格实际数据行数——不许谎报
+    expect(dataRows(result.text)).toBe(shownN);
+    // 缺口一：本页内未展示 = 40 − 展示；恒等式一
+    const gapOne = /本页另有 (\d+) 条未展示/.exec(result.text);
+    expect(gapOne, '本页放不下时必须报「本页另有 N 条未展示」').not.toBeNull();
+    expect(Number(gapOne![1]) + shownN).toBe(40);
+    // total = 本次取回，所以缺口二为 0，不许出现"未取回"
+    expect(result.text).not.toContain('未取回');
+    expect(result.text).toMatch(/可减小 limit 让本页放得下，或缩小区间后重查/);
+  });
+
+  /**
+   * `total` 远大于本次返回（分页）时的计数口径（2026-10-30 调研者指出的边界：
+   * 他读到的是旧字节，但这一档确实没有测试覆盖）。
+   *
+   * 实测形态：`limit=5` 打在 `chr1A:1-2000000`（`total=427`）上 → 本页 `records=5`、`has_more=true`。
+   * 此时「另有 X 条未展示」**只能**是 本页 5 − 展示数，**不能**是 427 − 展示数：
+   * 没取到的分页记录由「上游 total」表达，"没取到的"和"取到了没展示的"是两种缺失。
+   */
+  it('total(427) 远大于本次取回(40)：两个缺口分开报，各自恒等式成立', async () => {
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        const first = (data.records as Array<Record<string, unknown>>)[0]!;
+        data.records = Array.from({ length: 40 }, (_, i) => ({
+          ...first,
+          pos: 1000 + i * 100,
+          id: `WTa_page_${i}`,
+        }));
+        data.total = 427;
+        data.total_shown = 40;
+        data.has_more = true;
+      },
+    });
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000', limit: 40 },
+      ctx,
+    );
+
+    // 三层计数：命中 / 本次取回 / 正文展示 必须分开报
+    expect(result.text).toContain('命中 427 条；本次取回 40 条');
+    const shownMatch = /正文展示 (\d+) 条/.exec(result.text);
+    const shownN = Number(shownMatch![1]);
+    expect(shownN).toBeLessThan(40); // 40 条必然被字节闸裁过
+
+    // 缺口一（本页内未展示）与缺口二（未取回）必须是两句，不许合并成一句
+    const gapOne = /本页另有 (\d+) 条未展示/.exec(result.text);
+    const gapTwo = /另有 (\d+) 条未取回/.exec(result.text);
+    expect(gapOne, '本页放不下时必须报「本页另有 N 条未展示」').not.toBeNull();
+    expect(gapTwo, 'total 大于本页时必须单独报「另有 N 条未取回」').not.toBeNull();
+    // 恒等式一：展示 + 本页未展示 = 本次取回(40)
+    expect(shownN + Number(gapOne![1])).toBe(40);
+    // 恒等式二：本次取回(40) + 未取回 = 命中(427)
+    expect(40 + Number(gapTwo![1])).toBe(427);
+    // 关键：本页缺口绝不能把没取到的 387 条算进来
+    expect(Number(gapOne![1])).toBeLessThanOrEqual(40);
+    expect(result.text).not.toContain(`本页另有 ${427 - shownN} 条`);
+    // 用户视角的算术必须闭合：两个缺口之和 = 真正没看到的条数（427 − 6 = 34 + 387）
+    // ——这样才能证明"拆两句"没有把任何一段漏报掉（调研者担心的少报 377 就是这一层）。
+    expect(Number(gapOne![1]) + Number(gapTwo![1])).toBe(427 - shownN);
+    // 未取回那条要给出可执行路径：limit 未到 100 时"调大 limit"是可行的
+    expect(result.text).toMatch(/另有 387 条未取回（本仓不分页）——可调大 limit（本仓上限 100）或缩小区间后重查/);
+  });
+
+  it('limit 已到本仓上限 100 时，未取回缺口只能写"请缩小区间后重查"', async () => {
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        const first = (data.records as Array<Record<string, unknown>>)[0]!;
+        data.records = Array.from({ length: 100 }, (_, i) => ({
+          ...first,
+          pos: 1000 + i * 10,
+          id: `WTa_cap_${i}`,
+        }));
+        data.total = 427;
+        data.total_shown = 100;
+        data.has_more = true;
+      },
+    });
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000', limit: 100 },
+      ctx,
+    );
+
+    const gapTwo = /另有 (\d+) 条未取回/.exec(result.text);
+    expect(gapTwo).not.toBeNull();
+    expect(100 + Number(gapTwo![1])).toBe(427); // 327 条未取回：427 − 100
+    expect(result.text).toMatch(/另有 327 条未取回（limit 已到本仓上限 100，本仓不分页）——请缩小区间后重查/);
+    expect(result.text).not.toContain('可调大 limit');
+  });
+
+  it('空结果 + has_more=true → 抛错（矛盾不许当成功返回）', async () => {
+    // 2026-10-30 审查复现：空结果分支此前不查 has_more，于是"0 条"却声称还有更多被当成功。
+    const { ctx } = replay('variant-query-empty.json', {
+      mutate: (payload) => {
+        (payload.data as Record<string, unknown>).has_more = true;
+      },
+    });
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-100' }, ctx),
+    ).rejects.toThrow(/has_more=true/);
+  });
+
+  it('缺口提示必须进正文：即使顶到字节预算也不许被裁掉', async () => {
+    // 2026-10-30 审查复现：缺口文案原来拼在 fitTable 之后，正文一满就被裁。
+    // 构造 100 条 + 长注释顶满预算，断言缺口那句仍在正文里、整包 ≤4 KB。
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        const first = (data.records as Array<Record<string, unknown>>)[0]!;
+        data.records = Array.from({ length: 100 }, (_, i) => ({
+          ...first,
+          pos: 1000 + i,
+          id: `WTa_budget_${i}`,
+          info: { ANN: `${'A'.repeat(20)}|downstream_gene_variant|MODIFIER|TraesCS1A02G0007${i}|TraesCS1A02G0007${i}.1|protein_coding|1/2` },
+        }));
+        data.total = 427;
+        data.total_shown = 100;
+        data.has_more = true;
+      },
+    });
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000', limit: 100 },
+      ctx,
+    );
+
+    // 正文必须同时含：本页未展示（若有）+ 未取回 327 条
+    expect(result.text).toMatch(/另有 327 条未取回/);
+    expect(result.text).toContain('请缩小区间后重查');
+    expect(utf8Bytes(result.text)).toBeLessThanOrEqual(4096);
+    // 出处仍完整
+    expect(result.text).toContain('源：小麦多组学平台（WheatOmics）');
+  });
+
+  it('对外描述不写内部字节常数；共享常量保留给"后拼省略句"的调用点', async () => {
+    const def = tool('wheatomics_variant_query');
+    // 描述只承诺"会发生什么"，不写内部预算数字（写了就会随实现漂移，模型还会当真）
+    const desc = def.parameters.properties!.limit!.description!;
+    expect(desc).not.toMatch(/\d{3,4}\s*B/);
+    expect(desc).not.toContain('1208');
+    expect(desc).toContain('输出侧预算统一裁剪');
+
+    // variant_datasets 仍是"先排表、后拼省略句"的形态：它的 200 B 预留不能被顺手改掉。
+    // 把 3 个参考基因组各塞满 40 个数据集顶到预算，省略句必须还在、整包 ≤4 KB。
+    const { ctx } = replay('variant-datasets.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        (data.references as Array<Record<string, unknown>>).forEach((ref, r) => {
+          const list = ref.datasets as Array<Record<string, unknown>>;
+          const first = list[0]!;
+          // key 必须跨参考基因组唯一，否则工具会按"同一 key 多处出现"判漂移
+          ref.datasets = Array.from({ length: 40 }, (_, i) => ({
+            ...first, key: `ds_${r}_${i}`, label: `ds_${r}_${i}`,
+          }));
+        });
+      },
+    });
+    const out = await tool('wheatomics_variant_datasets').run({}, ctx);
+    expect(out.text).toMatch(/另有 \d+ 个数据集未展示|共 \d+ 个/);
+    expect(utf8Bytes(out.text)).toBeLessThanOrEqual(4096);
+  });
+
+  it('raw 是白名单投影：去掉 info/info_raw，保留 chrom/pos/id/ref/alt/filter', async () => {
+    const { ctx } = replay('variant-query.json');
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' },
+      ctx,
+    );
+    const raw = result.raw as { records: Array<Record<string, unknown>> };
+    expect(raw.records).toHaveLength(1);
+    const record = raw.records[0]!;
+    expect(record.pos).toBe(168831);
+    expect(record.info).toBeUndefined();
+    expect(record.info_raw).toBeUndefined();
+  });
+
+  it('0 条：成功文本 + 固定警示句，绝不写成「没有变异」', async () => {
+    const { ctx } = replay('variant-query-empty.json');
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-100' },
+      ctx,
+    );
+
+    expect(result.text).toContain('0 条');
+    expect(result.text).toContain('0 条不等于该区间没有变异');
+    expect(result.text).toContain('genome_concordant');
+    // 只允许"不等于…没有变异"的否定式，不许出现肯定式断言
+    expect(result.text).not.toMatch(/(?<!不等于)该区间没有变异/);
+    expect(result.text).not.toContain('不存在');
+  });
+
+  it('记录落在请求区间外 → 身份不符抛错，不把无关记录当结果', async () => {
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        (data.records as Array<Record<string, unknown>>)[0]!.pos = 999999;
+      },
+    });
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' }, ctx),
+    ).rejects.toThrow(/身份不符/);
+  });
+
+  it('染色体不一致 → 身份不符抛错', async () => {
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        (data.records as Array<Record<string, unknown>>)[0]!.chrom = 'chr5B';
+      },
+    });
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' }, ctx),
+    ).rejects.toThrow(/身份不符/);
+  });
+
+  it('total>0 但 records 为空 → 结构漂移，不当成空结果', async () => {
+    const { ctx } = replay('variant-query-empty.json', {
+      mutate: (payload) => {
+        (payload.data as Record<string, unknown>).total = 5;
+      },
+    });
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-100' }, ctx),
+    ).rejects.toThrow(/自相矛盾/);
+  });
+
+  it('records 缺失 → 结构漂移', async () => {
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        delete (payload.data as Record<string, unknown>).records;
+      },
+    });
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' }, ctx),
+    ).rejects.toThrow(/records/);
+  });
+
+  it('region 参数非法时本地拒绝且零请求', async () => {
+    const bad = [
+      'chr1A', // 缺区间
+      'chr1A:1', // 缺终点
+      'chr1A:0-100', // 起点 0
+      'chr1A:200-100', // 起点大于终点
+      'chr1A:1-200000\n', // 尾随换行（控制字符）
+      ' chr1A:1-100', // 首尾空白
+      `chr1A:1-${'9'.repeat(20)}`, // 超长
+      'chr 1A:1-100', // 染色体含空格
+    ];
+    for (const region of bad) {
+      const { ctx, urls } = replay('variant-query.json');
+      await expect(
+        tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region }, ctx),
+        `应拒绝 region=${JSON.stringify(region)}`,
+      ).rejects.toThrow();
+      expect(urls, `region=${JSON.stringify(region)} 不应发请求`).toHaveLength(0);
+    }
+  });
+
+  it('普通闭区间查询：两端点都包含，发出去的就是用户给的区间', async () => {
+    // 五次边界实验证实区间是闭区间；正常区间不做任何扩窗改写。
+    const { ctx, urls } = replay('variant-query.json', {
+      mutate: (payload) => {
+        (payload.data as Record<string, unknown>).region = 'chr1A:1-200000';
+      },
+    });
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' },
+      ctx,
+    );
+    expect(urls[0]).toContain('region=chr1A%3A1-200000');
+    expect(result.text).toContain('WTa_096d3b');
+    expect(result.text).toContain('闭区间');
+  });
+
+  it('单点（start===end）本地拒绝且零请求：上游会以 400 拒绝等端点区间，不是查无', async () => {
+    // 2026-10-29 实测：chr1A:168831-168831 → 400 Region length must be > 0 and <= 5000000 bp
+    // 本仓选择本地拒绝（不做自动扩窗），避免把透传 400 当成"该位点没有变异"。
+    const { ctx, urls } = replay('variant-query.json');
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:168831-168831' }, ctx),
+    ).rejects.toThrow(/起点与终点相同/);
+    expect(urls, '单点必须在本地拒绝，一个请求都不发').toHaveLength(0);
+  });
+
+  it('单点被拒时的文案：说明不是「没有变异」，并给出可用的区间写法', async () => {
+    const { ctx } = replay('variant-query.json');
+    let message = '';
+    try {
+      await tool('wheatomics_variant_query').run(
+        { dataset: 'whealbi_minocc10', region: 'chr1A:168831-168831' },
+        ctx,
+      );
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain('400');
+    expect(message).toContain('不是"该位点没有变异"');
+    // 给出规避写法（168830-168832）
+    expect(message).toContain('168830-168832');
+  });
+
+  it('起点为 1 的单点同样本地拒绝，不产生 0 坐标', async () => {
+    const { ctx, urls } = replay('variant-query.json');
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-1' }, ctx),
+    ).rejects.toThrow(/起点与终点相同/);
+    expect(urls).toHaveLength(0);
+  });
+
+  it('400 参数非法不得被当成「查无」：错误类型与 200+total=0 不同', async () => {
+    // 400 由共享 http 层抛 UpstreamError；这条断言确保它不会被折成成功文本
+    const { ctx } = replayStatus('variant-query.json', 400);
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' }, ctx),
+    ).rejects.toThrow();
+
+    // 对照：200 + total=0 是成功文本，且带警示句
+    const empty = replay('variant-query-empty.json');
+    const ok = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-100' },
+      empty.ctx,
+    );
+    expect(ok.text).toContain('0 条');
+    expect(ok.text).toContain('0 条不等于该区间没有变异');
+  });
+
+  it('透出 data.reference（正文与 raw 都要有）；上游没给时降级显示、不抛错', async () => {
+    // WHT-06：ID/坐标的可比性取决于 reference，此前完全没读
+    const { ctx } = replay('variant-query.json');
+    const out = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' }, ctx,
+    );
+    expect(out.text).toContain('reference=Chinese_Spring1.0');
+    expect((out.raw as { reference?: string }).reference).toBe('Chinese_Spring1.0');
+
+    // 缺字段按 §三 顺序接：可选字段先接住、降级显示，不抛错
+    const missing = replay('variant-query.json', {
+      mutate: (payload) => { delete (payload.data as Record<string, unknown>).reference; },
+    });
+    const degraded = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' }, missing.ctx,
+    );
+    expect(degraded.text).toContain('reference=(上游未给)');
+  });
+
+  it('400 分流：区间非法 / 数据集不支持 / 未识别 → 三种话说清，且不透出上游原文', async () => {
+    const badRequest = (detail: string) => ({
+      http: async (url: string) => {
+        throw new UpstreamError('上游返回 HTTP 400', {
+          url, status: 400, attempts: 1, bodySnippet: JSON.stringify({ detail }),
+        });
+      },
+    }) as unknown as ToolContext;
+
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' },
+        { http: badRequest('Region length must be > 0 and <= 5000000 bp').http }),
+    ).rejects.toThrow(/区间长度非法/);
+
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' },
+        { http: badRequest('Unsupported dataset: nope').http }),
+    ).rejects.toThrow(/数据集 key 不受支持/);
+
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' },
+        { http: badRequest('something else').http }),
+    ).rejects.toThrow(/原因未识别/);
+
+    // 上游 detail 原文不得进可见错误文本
+    for (const detail of ['Region length must be > 0 and <= 5000000 bp', 'Unsupported dataset: nope']) {
+      const err = await tool('wheatomics_variant_query')
+        .run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' }, { http: badRequest(detail).http })
+        .catch((e: Error) => e);
+      expect((err as Error).message).not.toContain(detail);
+    }
+  });
+
+  it('描述写清 region 是单个字符串参数，且「本仓不暴露」按变异 ID 查询（归因到本仓，不说成上游缺陷）', () => {
+    const def = tool('wheatomics_variant_query');
+    expect(def.description).toContain('单个字符串参数');
+    expect(def.description).toContain('0 条不等于该区间没有变异');
+    // 措辞：上游支持 variant_id，是本仓为性能不暴露——不许写成"上游不支持"
+    expect(def.description).toContain('本仓不暴露按变异 ID 查询');
+    expect(def.description).toContain('19 s');
+    expect(def.description).not.toMatch(/不支持按变异 ID 查询/);
+    // 能力面差异要在描述里说清：只按区间查
+    expect(def.parameters.properties!.region!.description).toContain('只支持按区间查');
+    // variant_id 不在参数表里（19 秒全表扫描，超出超时预算）
+    expect(Object.keys(def.parameters.properties ?? {})).not.toContain('variant_id');
+  });
+
+  /**
+   * ⚠️ **破坏性变更（offset 新增）**：原断言是
+   *   `not.toContain('offset')` / 描述含「不提供 offset」 / 正文含「未暴露 offset」
+   * 加 offset 之后这三条**全部作废并反转**。这批旧断言正好演示了一件事：
+   * 钉住"本仓不做某事"的断言，会在做那件事时挡住变更——所以它们必须随契约一起改。
+   */
+  it('offset 已暴露：参数表有 offset、描述与正文都给翻页指引（不再是「缩小区间」唯一出路）', async () => {
+    const def = tool('wheatomics_variant_query');
+    const props = Object.keys(def.parameters.properties ?? {});
+    expect(props).toContain('offset');
+    expect(def.parameters.properties!.offset!.type).toBe('integer');
+    expect(def.parameters.properties!.offset!.minimum).toBe(0);
+    expect(def.parameters.properties!.offset!.maximum).toBe(499900);
+    expect(def.parameters.properties!.offset!.default).toBe(0);
+    // 描述里不许再出现「不提供 offset」这种已撤销的说法
+    expect(def.description).not.toContain('不提供 offset');
+    expect(def.description).toContain('用 `offset` 翻页');
+    // limit 范围不因加 offset 而变
+    expect(def.parameters.properties!.limit!.maximum).toBe(100);
+    expect(def.parameters.properties!.limit!.default).toBe(20);
+
+    // 真实形态：total 远大于本次取回，且上游标记 has_more
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        data.total = 427;
+        data.total_shown = 1;
+        data.has_more = true;
+      },
+    });
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' },
+      ctx,
+    );
+    expect(result.text).toContain('还有更多');
+    // 不许再写「未暴露 offset」——那是已撤销的旧口径
+    expect(result.text).not.toContain('未暴露 offset');
+    // 必须给**翻页**这条现在就能走的路，并算好下一页的 offset
+    expect(result.text).toMatch(/用 offset=\d+ 翻到下一页/);
+    const raw = result.raw as { offset: number; next_offset?: number };
+    expect(raw.offset).toBe(0);
+    expect(raw.next_offset).toBe(1);   // offset + 本次取回条数
+  });
+
+  it('offset 会真的发给上游，并出现在出处里', async () => {
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        data.total = 427; data.total_shown = 1; data.has_more = true;
+      },
+    });
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000', offset: 40, limit: 20 },
+      ctx,
+    );
+    // 出处必须能复现这次查询（含 offset）
+    expect(result.text).toContain('offset=40');
+    const raw = result.raw as { offset: number; next_offset?: number };
+    expect(raw.offset).toBe(40);
+    expect(raw.next_offset).toBe(41);
+  });
+
+  /**
+   * `optionalIntArg`（`src/core/shape.ts`）的既有行为是**钳制到范围内**，不是拒绝越界：
+   *   -1 → 0、499901 → 499900、1.5 → 1（Math.trunc）
+   * 非数字则抛 `InvalidArgumentError`。
+   *
+   * 这是公共层行为，本批**不改它**（改它会波及所有源的参数处理）。
+   * 所以这条断言按**实际语义**写：越界被钳制、非数字被拒。
+   * ⚠️ 用户传 `offset=-1` 会静默变成 0——这是已知行为，不是本批引入的问题。
+   */
+  it('offset 越界被钳制到范围内、非数字被拒（公共层 optionalIntArg 的既有语义）', async () => {
+    const cases: Array<[unknown, number]> = [[-1, 0], [499901, 499900], [1.5, 1]];
+    for (const [input, expected] of cases) {
+      const { ctx } = replay('variant-query.json', {
+        mutate: (payload) => {
+          const data = payload.data as Record<string, unknown>;
+          data.total = 427; data.total_shown = 1; data.has_more = true;
+        },
+      });
+      const result = await tool('wheatomics_variant_query').run(
+        { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000', offset: input }, ctx);
+      expect((result.raw as { offset: number }).offset, `offset=${String(input)}`)
+        .toBe(expected);
+    }
+    // 非数字必须拒（用 try/catch 收住同步与异步两种抛出，避免 unhandled rejection）
+    for (const bad of ['abc', {}, []]) {
+      const { ctx } = replay('variant-query.json');
+      let err: unknown = null;
+      try {
+        await tool('wheatomics_variant_query').run(
+          { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000', offset: bad }, ctx);
+      } catch (e) { err = e; }
+      expect(err, `offset=${String(bad)} 应被拒`).toBeInstanceOf(InvalidArgumentError);
+    }
+  });
+
+  it('上游自相矛盾（has_more=true 但本次取回已等于命中）→ 抛错，不猜"还有多少"', async () => {
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        // total 与 records 都是 1，却声称还有更多
+        data.has_more = true;
+      },
+    });
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' }, ctx),
+    ).rejects.toThrow(/has_more=true，但本次取回/);
+  });
+
+  it('limit 入参范围不动（1–100）：100 原样发上游，200 夹到 100；体积只由输出侧字节闸兜', async () => {
+    // WHT-02 裁定：**收紧参数**与**收紧输出**是两件事。缩到 50 会拒绝原本合法的 51–100 输入，
+    // 那是参数契约的实际收缩；本仓不改范围，只裁输出。
+    const def = tool('wheatomics_variant_query');
+    expect(def.parameters.properties!.limit!.maximum).toBe(100);
+    expect(def.parameters.properties!.limit!.minimum).toBe(1);
+
+    const hundred = replay('variant-query.json');
+    await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000', limit: 100 },
+      hundred.ctx,
+    );
+    expect(hundred.urls[0], '100 是已发布的合法入参，必须原样发出').toContain('limit=100');
+
+    // 超上限仍按既有夹取语义处理（所有工具一致），不会把 200 发给上游
+    const over = replay('variant-query.json');
+    await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000', limit: 200 },
+      over.ctx,
+    );
+    expect(over.urls[0]).toContain('limit=100');
+    expect(over.urls[0]).not.toContain('limit=200');
+
+    const zero = replay('variant-query.json');
+    await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000', limit: 0 },
+      zero.ctx,
+    );
+    expect(zero.urls[0]).toContain('limit=1');
+  });
+});
+
+// ── 审查 WHT3-01～04 四条反例（2026-10-29 对抗审查复现后补） ────────────────
+//
+// 这四类都是"看着是绿的、其实把错误当成了正常"：
+//   WHT3-01 缺计数 / [null] 被折成合法 0 条
+//   WHT3-02 身份对账只覆盖顶层字段
+//   WHT3-03 空结果分支绕过 raw 白名单
+//   WHT3-04 首行"展示 N 条"与表格实际行数冲突
+// 每条断言的都是**应该失败**，不是应该成功。
+
+describe('WHT3-01 缺失计数与非法数组元素不得折成合法 0 条', () => {
+  it('同源：删掉 count 却返回 hits=[] → 结构漂移，不许打印「上游 count=0」', async () => {
+    const { ctx } = replay('homologs-empty.json', {
+      mutate: (payload) => {
+        delete (payload.data as Record<string, unknown>).count;
+      },
+    });
+    await expect(
+      tool('wheatomics_cross_species_homologs').run({ gene_id: 'TraesCS9Z99G999999' }, ctx),
+    ).rejects.toThrow(/count/);
+  });
+
+  it('同源：count=0 但 hits=[null] → 结构漂移，不许当成 0 条', async () => {
+    const { ctx } = replay('homologs.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        data.count = 0;
+        data.hits = [null];
+      },
+    });
+    await expect(
+      tool('wheatomics_cross_species_homologs').run({ gene_id: 'TraesCS5A02G391700' }, ctx),
+    ).rejects.toThrow(/不是对象/);
+  });
+
+  it('变异：total=0 但 records=[null] → 结构漂移，不许当成 0 条', async () => {
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        data.total = 0;
+        data.total_shown = 0;
+        data.records = [null];
+      },
+    });
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' }, ctx),
+    ).rejects.toThrow(/不是对象/);
+  });
+
+  it('变异：删掉 total 与 total_shown → 结构漂移，尾注不许写 total=0', async () => {
+    const { ctx } = replay('variant-query-empty.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        delete data.total;
+        delete data.total_shown;
+      },
+    });
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-100' }, ctx),
+    ).rejects.toThrow(/total/);
+  });
+
+  it('变异：total 为负数或非整数 → 结构漂移', async () => {
+    for (const bad of [-1, 1.5, '0', null]) {
+      const { ctx } = replay('variant-query-empty.json', {
+        mutate: (payload) => {
+          (payload.data as Record<string, unknown>).total = bad;
+        },
+      });
+      await expect(
+        tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-100' }, ctx),
+        `total=${JSON.stringify(bad)} 应被拒绝`,
+      ).rejects.toThrow(/total/);
+    }
+  });
+
+  it('数据集目录：references=[null] → 结构漂移', async () => {
+    const { ctx } = replay('variant-datasets.json', {
+      mutate: (payload) => {
+        (payload.data as Record<string, unknown>).references = [null];
+      },
+    });
+    await expect(tool('wheatomics_variant_datasets').run({}, ctx)).rejects.toThrow(/不是对象/);
+  });
+
+  it('数据集目录：datasets 里混入纯字符串元素 → 结构漂移，不猜它是 key', async () => {
+    const { ctx } = replay('variant-datasets.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        const refs = data.references as Array<Record<string, unknown>>;
+        (refs[0]!.datasets as unknown[]).push('bare_string_key');
+      },
+    });
+    await expect(tool('wheatomics_variant_datasets').run({}, ctx)).rejects.toThrow(/非对象/);
+  });
+});
+
+describe('WHT3-02 身份对账必须覆盖逐条与 dataset 回显', () => {
+  it('同源：顶层 query_gene 正确、但单条命中是别的基因 → 抛身份不符', async () => {
+    const { ctx } = replay('homologs.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        // 顶层保持正确，只污染第 1 条
+        (data.hits as Array<Record<string, unknown>>)[0]!.query_gene = 'UNREQUESTED_GENE';
+      },
+    });
+    await expect(
+      tool('wheatomics_cross_species_homologs').run({ gene_id: 'TraesCS5A02G391700' }, ctx),
+    ).rejects.toThrow(/身份不符/);
+  });
+
+  it('变异：坐标合法但 data.dataset 与请求不符 → 抛身份不符（不能用请求值覆盖回显）', async () => {
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        (payload.data as Record<string, unknown>).dataset = 'UNREQUESTED_DATASET';
+      },
+    });
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' }, ctx),
+    ).rejects.toThrow(/身份不符/);
+  });
+
+  it('变异：data.dataset 缺失 → 抛错，不假设就是请求的那个', async () => {
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        delete (payload.data as Record<string, unknown>).dataset;
+      },
+    });
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' }, ctx),
+    ).rejects.toThrow(/dataset/);
+  });
+
+  it('变异：data.region 与请求不符 → 抛身份不符', async () => {
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        (payload.data as Record<string, unknown>).region = 'chr5B:1-100';
+      },
+    });
+    await expect(
+      tool('wheatomics_variant_query').run({ dataset: 'whealbi_minocc10', region: 'chr1A:1-200000' }, ctx),
+    ).rejects.toThrow(/身份不符/);
+  });
+});
+
+describe('WHT3-03 空结果的 raw 也必须走白名单', () => {
+  it('变异空结果：上游附带 samples/genotypes/info_raw 时，raw 里一个都不许出现', async () => {
+    const { ctx } = replay('variant-query-empty.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        data.samples = ['SAMPLE_SENTINEL'];
+        (payload.data as Record<string, unknown>).genotypes = ['GENOTYPE_SENTINEL'];
+        data.info_raw = 'RAW_SENTINEL';
+        // 再塞进 records（空）同级位置也不该被带出
+        data.extra = 'EXTRA_SENTINEL';
+      },
+    });
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-100' },
+      ctx,
+    );
+
+    const serialized = JSON.stringify(result.raw);
+    expect(serialized).not.toContain('SAMPLE_SENTINEL');
+    expect(serialized).not.toContain('GENOTYPE_SENTINEL');
+    expect(serialized).not.toContain('RAW_SENTINEL');
+    expect(serialized).not.toContain('EXTRA_SENTINEL');
+    // 但仍要保留计数语义
+    expect(serialized).toContain('"total":0');
+  });
+
+  it('同源空结果：raw 不得原样带出上游 data 整包', async () => {
+    const { ctx } = replay('homologs-empty.json', {
+      mutate: (payload) => {
+        (payload.data as Record<string, unknown>).leak = 'LEAK_SENTINEL';
+      },
+    });
+    const result = await tool('wheatomics_cross_species_homologs').run({ gene_id: 'TraesCS9Z99G999999' }, ctx);
+    expect(JSON.stringify(result.raw)).not.toContain('LEAK_SENTINEL');
+  });
+
+  it('数据集目录：references=[] 时 raw 不带整包 data', async () => {
+    const { ctx } = replay('variant-datasets.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        data.references = [];
+        data.leak = 'LEAK_SENTINEL';
+      },
+    });
+    const result = await tool('wheatomics_variant_datasets').run({}, ctx);
+    expect(JSON.stringify(result.raw)).not.toContain('LEAK_SENTINEL');
+  });
+});
+
+describe('WHT3-04 展示条数在首行、表格、尾行必须一致', () => {
+  it('20 条记录放不下时：首行「正文展示 N」必须等于表格行数，且 N + 未展示 = 20', async () => {
+    const { ctx } = replay('variant-query.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        const first = (data.records as Array<Record<string, unknown>>)[0]!;
+        data.records = Array.from({ length: 20 }, (_, i) => ({
+          ...first,
+          pos: 168831,
+          id: `variant_${i}`,
+        }));
+        data.total = 20;
+        data.total_shown = 20;
+      },
+    });
+    const result = await tool('wheatomics_variant_query').run(
+      { dataset: 'whealbi_minocc10', region: 'chr1A:1-200000', limit: 20 },
+      ctx,
+    );
+
+    const headMatch = /正文展示 (\d+) 条/.exec(result.text);
+    expect(headMatch, '首行必须报告正文展示条数').not.toBeNull();
+    const headShown = Number(headMatch![1]);
+
+    // 表格实际数据行数
+    const tableRows = result.text.split('\n').filter((line) => line.trim().startsWith('|')).length - 2;
+    expect(tableRows).toBe(headShown);
+
+    // 尾行口径一致：**恒等式硬断言**，不再用 `if (tailMatch)` 空转
+    // （2026-10-30 修订：WHT3-04 那轮写成条件式，措辞一改就整段跳过，等于没测）
+    const tailMatch = /本页另有 (\d+) 条未展示/.exec(result.text);
+    expect(tailMatch, '20 条超预算时必须报「本页另有 N 条未展示」').not.toBeNull();
+    expect(Number(tailMatch![1]) + headShown).toBe(20); // 恒等式一：展示 + 本页未展示 = 本次取回
+    expect(result.text).toContain('命中 20 条；本次取回 20 条');
+    expect(result.text).not.toContain('未取回'); // total = 本次取回，缺口二为 0
+    expect(result.text).toMatch(/可减小 limit 让本页放得下，或缩小区间后重查/);
+
+    expect(utf8Bytes(result.text)).toBeLessThanOrEqual(4096);
+    expect(result.text).not.toContain('另有 -');
+  });
+
+  it('同源：条数放不下时首行「本次正文展示 N」与表格行数一致', async () => {
+    const { ctx } = replay('homologs.json', {
+      mutate: (payload) => {
+        const data = payload.data as Record<string, unknown>;
+        const first = (data.hits as Array<Record<string, unknown>>)[0]!;
+        data.hits = Array.from({ length: 30 }, (_, i) => ({
+          ...first,
+          target_gene: `TG_${i}`,
+          description: 'x'.repeat(120),
+        }));
+        data.count = 30;
+      },
+    });
+    const result = await tool('wheatomics_cross_species_homologs').run(
+      { gene_id: 'TraesCS5A02G391700', max_targets: 3 },
+      ctx,
+    );
+
+    const headMatch = /本次正文展示 (\d+) 条/.exec(result.text);
+    const tableRows = result.text.split('\n').filter((line) => line.trim().startsWith('|')).length - 2;
+    if (headMatch) expect(Number(headMatch[1])).toBe(tableRows);
+    expect(utf8Bytes(result.text)).toBeLessThanOrEqual(4096);
+  });
+});
+
+
+describe('封装层补齐第 6 条：同源正文可机器消费（structuredContent）', () => {
+  it('每条命中的 gene id / species / identity / E-value 逐字段给出，旧表格仍作摘要', async () => {
+    const { ctx } = replay('homologs.json');
+    const result = await tool('wheatomics_cross_species_homologs').run(
+      { gene_id: 'TraesCS5A02G391700', max_targets: 3 },
+      ctx,
+    );
+
+    const structured = result.structured as {
+      query_gene: string;
+      count: number;
+      species_covered: string[];
+      hits: Array<{ target_gene: string; species: string; identity: number; evalue: number }>;
+    };
+    expect(structured.query_gene).toBe('TraesCS5A02G391700');
+    expect(structured.count).toBe(6);
+    expect(structured.species_covered).toEqual(['Rice', 'Arabidopsis']);
+    expect(structured.hits).toHaveLength(6);
+    const rice = structured.hits.find((hit) => hit.target_gene === 'LOC_Os03g54160');
+    expect(rice).toMatchObject({ species: 'Rice', identity: 84.211, evalue: 6.49e-131 });
+    // 正文仍是可读摘要，不被结构化替代
+    expect(result.text).toContain('命中 6 条同源基因');
+  });
+
+  it('查无时也给结构化空结果，不带上游整包 data', async () => {
+    const { ctx } = replay('homologs-empty.json');
+    const result = await tool('wheatomics_cross_species_homologs').run({ gene_id: 'TraesCS9Z99G999999' }, ctx);
+    expect(result.structured).toMatchObject({
+      query_gene: 'TraesCS9Z99G999999',
+      count: 0,
+      max_targets: 3,
+      species_covered: ['Rice', 'Arabidopsis'],
+      hits: [],
+      note: '0 条只表示本次比对无命中；上游没有 ortholog/paralog 分类字段',
+    });
+  });
+});
+
+describe('封装层补齐第 3 条：gene_version 可省，03G/02G→02G 走 resolve，01G 回退 IWGSCv1_result', () => {
+  const resolvePayload = (name: string): unknown => {
+    const doc = JSON.parse(readFileSync(join(FIXTURE_DIR, name), 'utf8')) as { payload: unknown };
+    return doc.payload;
+  };
+
+  function routeContext(routes: Array<{ match: RegExp; payload: unknown }>): { ctx: ToolContext; urls: string[] } {
+    const urls: string[] = [];
+    const http = (async (url: string) => {
+      urls.push(url);
+      const route = routes.find((candidate) => candidate.match.test(url));
+      if (!route) throw new Error(`未预期的请求：${url}`);
+      return { data: route.payload, url, status: 200, durationMs: 12, attempts: 1 };
+    }) as Fetcher;
+    return { ctx: { http }, urls };
+  }
+
+  it('不传 gene_version：03G → 02G（gene_primary/gene_secondary），出处列出逐 ID 请求', async () => {
+    const { ctx, urls } = routeContext([
+      { match: /\/genes\/resolve\?ID=TraesCS5A03G0935400/, payload: resolvePayload('genes-resolve.json') },
+    ]);
+    const result = await tool('wheatomics_convert_gene_ids').run({ ids: 'TraesCS5A03G0935400' }, ctx);
+
+    expect(urls[0]).toContain('/genes/resolve?ID=TraesCS5A03G0935400');
+    expect(result.text).toContain('TraesCS5A02G391700');
+    expect(result.text).toContain('resolve');
+    expect(result.meta.request).toContain('/genes/resolve');
+    const structured = result.structured as { mode: string; mapped: number; mappings: Array<{ resolved_02g: string; table: string }> };
+    expect(structured.mode).toBe('resolve');
+    expect(structured.mapped).toBe(1);
+    expect(structured.mappings[0].resolved_02g).toBe('TraesCS5A02G391700');
+    expect(structured.mappings[0].table).toBe('Genefunc_CS_IWGSC03G_table');
+  });
+
+  it('01G 转录本：resolve count=0 → 自动回退 IWGSCv1_result 表', async () => {
+    const { ctx, urls } = routeContext([
+      { match: /\/genes\/resolve\?ID=TraesCS1A01G018500\.1/, payload: resolvePayload('genes-resolve-01g-empty.json') },
+      {
+        match: /\/id-conversion\?/,
+        payload: {
+          success: true,
+          data: {
+            version: 'IWGSCv1_result',
+            mappings: [{ query_gene: 'TraesCS1A01G018500.1', reference_gene: 'TraesCS1A02G018500.1', code: '=', length: '2608' }],
+            not_found: [],
+          },
+        },
+      },
+    ]);
+    const result = await tool('wheatomics_convert_gene_ids').run({ ids: 'TraesCS1A01G018500.1' }, ctx);
+
+    expect(urls).toHaveLength(2);
+    expect(urls[1]).toContain('gene_version=IWGSCv1_result');
+    expect(result.text).toContain('TraesCS1A02G018500.1');
+    const structured = result.structured as { mappings: Array<{ method: string | null }> };
+    expect(structured.mappings[0].method).toBe('id-conversion(IWGSCv1_result)');
+  });
+
+  it('不给 gene_version 时上限 20 个 ID（逐 ID 查询），超了本地拒绝且不发请求', async () => {
+    const { ctx, urls } = routeContext([
+      { match: /\/genes\/resolve/, payload: resolvePayload('genes-resolve.json') },
+    ]);
+    const tooMany = Array.from({ length: 21 }, (_, i) => `TraesCS1A02G${String(i).padStart(6, '0')}`).join(',');
+    await expect(tool('wheatomics_convert_gene_ids').run({ ids: tooMany }, ctx)).rejects.toThrow(/最多 20 个/);
+    expect(urls).toHaveLength(0);
+  });
+
+  it('03G 代次事实：id-conversion 原文 400「Unsupported id conversion table: 03G」，03G→02G 只能走 resolve', async () => {
+    const { ctx } = routeContext([
+      { match: /\/genes\/resolve/, payload: resolvePayload('genes-resolve.json') },
+    ]);
+    const result = await tool('wheatomics_convert_gene_ids').run({ ids: 'TraesCS5A03G0935400' }, ctx);
+    const structured = result.structured as { notes: { id_conversion_03g: string } };
+    expect(structured.notes.id_conversion_03g).toContain('Unsupported id conversion table: 03G');
+    expect(structured.notes.id_conversion_03g).toContain('/api/genes/resolve');
+  });
+
+  it('02G→01G 上游没有端点：正文与结构化都写「未知」，不推算', async () => {
+    const { ctx } = routeContext([
+      { match: /\/genes\/resolve/, payload: resolvePayload('genes-resolve.json') },
+    ]);
+    const result = await tool('wheatomics_convert_gene_ids').run({ ids: 'TraesCS5A03G0935400' }, ctx);
+    expect(result.text).toContain('02G→01G');
+    expect(result.text).toContain('未知');
+    const structured = result.structured as { notes: { direction: string } };
+    expect(structured.notes.direction).toContain('02G→01G');
+  });
+
+  it('source_generation=03G：显式声明源代次仍走 resolve，并写进 structured', async () => {
+    const { ctx, urls } = routeContext([
+      { match: /\/genes\/resolve/, payload: resolvePayload('genes-resolve.json') },
+    ]);
+    const result = await tool('wheatomics_convert_gene_ids').run(
+      { ids: 'TraesCS5A03G0935400', source_generation: '03G' },
+      ctx,
+    );
+    expect(urls[0]).toContain('/genes/resolve');
+    expect(result.text).toContain('源代次 03G');
+    const structured = result.structured as { source_generation: string | null; mapped: number };
+    expect(structured.source_generation).toBe('03G');
+    expect(structured.mapped).toBe(1);
+  });
+
+  it('source_generation 与 gene_version 互斥，本地拒绝且不发请求', async () => {
+    const { ctx, urls } = routeContext([]);
+    await expect(tool('wheatomics_convert_gene_ids').run(
+      { ids: 'TraesCS5A03G0935400', source_generation: '03G', gene_version: 'IWGSCv1_result' },
+      ctx,
+    )).rejects.toThrow(/不能同时给/);
+    expect(urls).toHaveLength(0);
+  });
+});
+
+describe('零值诊断 零值诊断：0 条必须带四种原因之一，且不写「没有数据 / 不存在」', () => {
+  interface CapturedReplay {
+    capture: { originalBytes?: number; status?: number };
+    payload: unknown;
+  }
+
+  function replayCaptured(name: string): { ctx: ToolContext; urls: string[]; capture: CapturedReplay['capture'] } {
+    const doc = JSON.parse(readFileSync(join(FIXTURE_DIR, name), 'utf8')) as CapturedReplay;
+    const urls: string[] = [];
+    const http = (async (url: string) => {
+      urls.push(url);
+      return {
+        data: doc.payload,
+        url,
+        status: doc.capture.status ?? 200,
+        durationMs: 11,
+        attempts: 1,
+        originalBytes: doc.capture.originalBytes,
+      };
+    }) as Fetcher;
+    return { ctx: { http }, urls, capture: doc.capture };
+  }
+
+  it('unsupported_generation：4 个 03G 直送 GO 回 n=0（真采集），正文写代次不支持 + 代次/端点/HTTP/耗时/字节', async () => {
+    const { ctx, urls } = replayCaptured('go-03g-empty.json');
+    const result = await tool('wheatomics_enrichment').run({
+      mode: 'go',
+      genes: ['TraesCS1A03G0032400', 'TraesCS1A03G0107300', 'TraesCS5A03G0935400', 'TraesCS2A03G0643000'],
+    }, ctx);
+
+    expect(urls[0]).toContain('/api/go');
+    const structured = result.structured as { zero: { reason: string; generation: string; http_status: number } };
+    expect(structured.zero.reason).toBe('unsupported_generation');
+    expect(structured.zero.generation).toBe('03G');
+    expect(structured.zero.http_status).toBe(200);
+    expect(result.text).toContain('零值诊断：代次不支持（unsupported_generation）');
+    expect(result.text).toContain('代次 03G');
+    expect(result.text).toContain('/api/go');
+    expect(result.text).toContain('HTTP 200');
+    expect(result.text).toMatch(/耗时 \d+ ms/);
+    expect(result.text).toContain('字节 45 B');
+    expect(result.text).not.toContain('没有数据');
+    expect(result.text).not.toContain('不存在');
+  });
+
+  it('no_record：02G 在 PPI_poppin 合法空结果，写「本次未取到」而不是断言没有互作', async () => {
+    const { ctx } = replayCaptured('ppi-empty.json');
+    const result = await tool('wheatomics_ppi').run({ gene_ids: 'TraesCS1A02G013100' }, ctx);
+
+    const structured = result.structured as { zero: { reason: string; generation: string } };
+    expect(structured.zero.reason).toBe('no_record');
+    expect(structured.zero.generation).toBe('02G');
+    expect(result.text).toContain('本次未取到');
+    expect(result.text).toMatch(/代次 02G｜端点 \/api\/ppi\/query/);
+    expect(result.text).not.toContain('没有数据');
+    expect(result.text).not.toContain('不存在');
+  });
+
+  it('unknown：01G 同源回 count=0，但该代次支持未声明/未测，只能记未知', async () => {
+    const { ctx } = replayCaptured('homologs-01g-empty.json');
+    const result = await tool('wheatomics_cross_species_homologs').run({ gene_id: 'TraesCS1A01G018500LC' }, ctx);
+
+    const structured = result.structured as { zero: { reason: string; generation: string } };
+    expect(structured.zero.reason).toBe('unknown');
+    expect(structured.zero.generation).toBe('01G');
+    expect(result.text).toContain('原因未知，本次未取到');
+    expect(result.text).toContain('1.对代次 未做');
+    expect(result.text).not.toContain('没有数据');
+    expect(result.text).not.toContain('不存在');
+  });
+
+  it('endpoint_error：真采集 03G regulatory 404 不得折成 0 条空结果', () => {
+    const doc = JSON.parse(readFileSync(join(FIXTURE_DIR, 'regulatory-03g-404.json'), 'utf8')) as CapturedReplay;
+    const diagnosis = diagnoseZero({
+      endpoint: '/api/regulatory/gene/{gene_id}',
+      generation: '03G',
+      support: 'unsupported',
+      status: 404,
+      durationMs: 324,
+      bytes: doc.capture.originalBytes,
+      endpointFailed: true,
+    });
+    const text = renderZeroDiagnosis(diagnosis);
+
+    expect(diagnosis.reason).toBe('endpoint_error');
+    expect(diagnosis.http_status).toBe(404);
+    expect(text).toContain('端点/网络故障（endpoint_error）');
+    expect(text).toContain('HTTP 404');
+    expect(text).toContain('不能据此判断记录有无');
+    expect(text).not.toContain('没有数据');
+    expect(text).not.toContain('不存在');
+  });
+});

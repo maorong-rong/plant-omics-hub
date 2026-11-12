@@ -1,0 +1,33 @@
+{
+  "capture": {
+    "url": "https://wheatomics.sdau.edu.cn/api/synteny/search?ID=TraesCS1A01G018500LC",
+    "at": "2026-11-10T08:12:27.157794Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 315,
+    "simulated": false,
+    "note": "真实抓取 2026-11-10；315 B；01G 单基因同表可查到 count=1（对照 02G 的 count=0）"
+  },
+  "payload": {
+    "success": true,
+    "message": "ok",
+    "timestamp": "2026-11-10T08:12:19.276528+00:00",
+    "data": {
+      "count": 1,
+      "records": [
+        {
+          "chromosome": "chr1A",
+          "start_mb": 8.00978,
+          "end_mb": 8.010271,
+          "strand": "-",
+          "gene": "TraesCS1A01G018500LC",
+          "chinese_spring": null,
+          "durum_wheat": ".",
+          "wild_emmer": ".",
+          "triticum_urartu": ".",
+          "aegilops_tauschii": "."
+        }
+      ]
+    }
+  }
+}

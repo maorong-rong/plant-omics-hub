@@ -1,0 +1,11 @@
+{
+  "capture": {
+    "url": "https://data.gramene.org/v69/genes?idList=LOC_Os03g11614&idList=LOC_Os01g66030&idList=LOC_Os01g10504",
+    "at": "2026-11-11T05:28:16.689Z",
+    "status": 200,
+    "originalBytes": 5,
+    "contentType": "application/json; charset=utf-8",
+    "note": "真实采集：3 个 MSU LOC_Os… 一次 idList 查询，200 + 5 字节空数组（[\\n\\n]）；只证明本次未返回，不证明这些 ID 在别的空间没有记录"
+  },
+  "payload": []
+}

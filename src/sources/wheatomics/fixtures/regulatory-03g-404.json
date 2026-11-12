@@ -1,0 +1,18 @@
+{
+  "capture": {
+    "url": "https://wheatomics.sdau.edu.cn/api/regulatory/gene/TraesCS1A03G0032400",
+    "at": "2026-11-11T02:59:29.372868Z",
+    "capturedAt": "2026-11-11T02:59:29.499533Z",
+    "status": 404,
+    "contentType": "application/json",
+    "originalBytes": 41,
+    "sourceSha256": "165745E8C2D1C616544991E73E2FC3EC4F1AE4D86D1EA0F36B7DAAC1B4367F8E",
+    "rawBodySource": "re-collected",
+    "simulated": false,
+    "note": "真实抓取 2026-11-11；03G 直查 regulatory 回 HTTP 404 {\"detail\":\"Gene or transcript not found\"}（41 B）。用于零值诊断 endpoint_error 情形：404 是端点错误响应，不能折成 0 条空结果"
+  },
+  "rawBody": "{\"detail\":\"Gene or transcript not found\"}",
+  "payload": {
+    "detail": "Gene or transcript not found"
+  }
+}

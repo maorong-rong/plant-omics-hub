@@ -1,0 +1,51 @@
+{
+ "capture": {
+  "at": "2026-11-11T05:30:14Z",
+  "url": "https://sci.hainanu.edu.cn/strawberry/api/v1/synteny/search?geneId=FvesChr2G00180880&sourceAssembly=fves_v6&targetAssembly=fves_ruegen",
+  "status": 200,
+  "contentType": "application/json",
+  "originalBytes": 691,
+  "trimmed": [],
+  "rawBodySource": "re-collected",
+  "payloadRelation": "verbatim",
+  "capturedAt": "2026-11-11T05:30:14Z",
+  "rawBodyCollectedAt": "2026-11-11T05:30:14Z",
+  "sourceSha256": "9E6E835C6CDC38DD40B990B62C1A723486638BD3EE66E25B629F7D945448B36A"
+ },
+ "rawBody": "{\"analysisId\":\"fragaria-synteny-v2-seolhyang-20260914\",\"requestedGeneId\":\"FvesChr2G00180880\",\"queryGene\":{\"canonicalId\":\"FvesChr2G00180880\",\"displayId\":\"FvesChr2G00180880.1\",\"seqId\":\"chr2\",\"start\":2179563,\"end\":2180300,\"strand\":\"+\",\"order\":428},\"sourceAssembly\":{\"id\":\"fves_v6\",\"species\":\"Fragaria vesca\",\"label\":\"Hawaii-4 v6.0\",\"version\":\"v6.0(Horticulture Research. 2023)\",\"ploidy\":2,\"geneCount\":36173,\"exampleGene\":\"FvesChr1G00279070.1\"},\"targetAssembly\":{\"id\":\"fves_ruegen\",\"species\":\"Fragaria vesca\",\"label\":\"Ruegen\",\"version\":\"Ruegen(Fruit Research. 2025)\",\"ploidy\":2,\"geneCount\":35464,\"exampleGene\":\"FvRG_1g0000010\"},\"anchored\":false,\"totalBlockCount\":0,\"truncated\":false,\"blocks\":[]}",
+ "payload": {
+  "analysisId": "fragaria-synteny-v2-seolhyang-20260914",
+  "requestedGeneId": "FvesChr2G00180880",
+  "queryGene": {
+   "canonicalId": "FvesChr2G00180880",
+   "displayId": "FvesChr2G00180880.1",
+   "seqId": "chr2",
+   "start": 2179563,
+   "end": 2180300,
+   "strand": "+",
+   "order": 428
+  },
+  "sourceAssembly": {
+   "id": "fves_v6",
+   "species": "Fragaria vesca",
+   "label": "Hawaii-4 v6.0",
+   "version": "v6.0(Horticulture Research. 2023)",
+   "ploidy": 2,
+   "geneCount": 36173,
+   "exampleGene": "FvesChr1G00279070.1"
+  },
+  "targetAssembly": {
+   "id": "fves_ruegen",
+   "species": "Fragaria vesca",
+   "label": "Ruegen",
+   "version": "Ruegen(Fruit Research. 2025)",
+   "ploidy": 2,
+   "geneCount": 35464,
+   "exampleGene": "FvRG_1g0000010"
+  },
+  "anchored": false,
+  "totalBlockCount": 0,
+  "truncated": false,
+  "blocks": []
+ }
+}

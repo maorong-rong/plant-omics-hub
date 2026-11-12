@@ -1,0 +1,447 @@
+{
+ "capture": {
+  "at": "2026-11-11T05:29:44Z",
+  "url": "https://sci.hainanu.edu.cn/strawberry/api/v1/genes/search?geneId=FvesChr1G00279070.1",
+  "status": 200,
+  "contentType": "application/json",
+  "originalBytes": 10265,
+  "trimmed": [],
+  "rawBodySource": "re-collected",
+  "payloadRelation": "verbatim",
+  "capturedAt": "2026-11-11T05:29:44Z",
+  "rawBodyCollectedAt": "2026-11-11T05:29:44Z",
+  "sourceSha256": "A8C5E7B5D1473E62580E55938794EBF1FF3D8DA34DE9BDCFFA108149271E9B72"
+ },
+ "rawBody": "{\"id\":\"FvesChr1G00279070.1\",\"species\":\"Fragaria vesca\",\"version\":\"v6.0(Horticulture Research. 2023)\",\"displaySpecies\":\"Fragaria vesca\",\"displayVersion\":\"Hawaii-4 T2T v6.0 (Zhou et al., 2023)\",\"assemblies\":[{\"species\":\"Fragaria vesca\",\"version\":\"v6.0(Horticulture Research. 2023)\",\"displaySpecies\":\"Fragaria vesca\",\"displayVersion\":\"Hawaii-4 T2T v6.0 (Zhou et al., 2023)\",\"selected\":true}],\"proteinSequence\":\"MENHNAKLVPSGGLKPNPGEQEENPTLNRCGEEEEVNTESAEPPSPNAPQSSRTPFTNLSQVDADLALARTLQEQERAYMMLRMNNEGSDYGSWEAGSYVHDDEDDFHDDTDGNDDDEHYDGTDADNDEEDAFDVHAHEDAGDDHNPSVVYDPAVFSSDEAYARALQDAEDRDMAARLMAFAGIDDREAEDTENQGGNSQDAWEEVDPDELSYEELLALGEVVGTESRGLPADTIASLPSVSYKMGNGQNGSNESCAICRLDYEDGENLTVLSCTHSYHSECINNWLTINKVCPVCIAEVSTSGNS*\",\"cdsSequence\":\"ATGGAGAACCACAACGCGAAATTGGTCCCAAGCGGTGGACTCAAACCTAACCCCGGCGAACAAGAAGAGAACCCTACTCTTAATCGTTGCGGAGAAGAAGAAGAAGTAAATACCGAATCGGCGGAGCCTCCTTCACCTAATGCCCCGCAGTCCTCAAGAACTCCCTTCACTAATCTCAGTCAGGTCGATGCTGATCTTGCTCTTGCTCGAACTCTCCAAGAACAGGAAAGGGCATACATGATGCTGAGAATGAACAATGAGGGAAGTGATTATGGCAGTTGGGAAGCTGGAAGTTATGTGCATGATGATGAGGATGATTTTCATGATGATACTGACGGAAATGACGATGATGAGCATTATGATGGAACTGATGCTGACAATGATGAAGAAGATGCATTTGATGTGCACGCTCATGAAGATGCTGGAGACGATCATAACCCCAGTGTGGTATATGATCCTGCTGTTTTTTCAAGTGATGAAGCGTATGCAAGAGCCCTGCAGGATGCTGAAGATAGAGATATGGCAGCTAGACTGATGGCCTTTGCAGGGATTGATGACCGTGAAGCTGAGGACACAGAGAATCAGGGAGGTAACTCTCAGGATGCATGGGAGGAGGTTGACCCAGATGAACTTTCATATGAGGAGTTACTTGCGTTGGGTGAAGTTGTTGGAACAGAGAGCAGAGGACTTCCTGCTGATACAATTGCCTCATTGCCTTCAGTAAGCTACAAGATGGGAAATGGTCAGAATGGAAGCAATGAGTCGTGTGCCATTTGTCGGTTAGATTATGAGGATGGTGAAAACTTGACAGTACTTTCTTGCACACACTCTTATCATTCTGAGTGCATAAATAATTGGTTGACAATAAACAAGGTCTGCCCAGTTTGCATTGCTGAAGTCTCCACGTCCGGAAACAGCTAG\",\"kegg\":[{\"ko\":\"K19045\",\"definition\":\"E3 ubiquitin ligase BIG\"}],\"geneFamilies\":[\"zf-rbx1\"],\"signalPeptide\":null,\"geneOntology\":[{\"database\":\"Pfam\",\"databaseDefinition\":\"PF13639\",\"goId\":\"IPR001841\",\"goDefinition\":\"Ring finger domain\",\"start\":\"255\",\"end\":\"296\"},{\"database\":\"CDD\",\"databaseDefinition\":\"cd16454\",\"goId\":\"-\",\"goDefinition\":\"RING-H2_PA-TM-RING\",\"start\":\"256\",\"end\":\"296\"},{\"database\":\"Gene3D\",\"databaseDefinition\":\"G3DSA:3.30.40.10\",\"goId\":\"IPR013083\",\"goDefinition\":\"Zinc/RING finger domain, C3HC4 (zinc finger)\",\"start\":\"221\",\"end\":\"302\"},{\"database\":\"SUPERFAMILY\",\"databaseDefinition\":\"SSF57850\",\"goId\":\"-\",\"goDefinition\":\"RING/U-box\",\"start\":\"249\",\"end\":\"302\"},{\"database\":\"PANTHER\",\"databaseDefinition\":\"PTHR47530\",\"goId\":\"IPR043312\",\"goDefinition\":\"E3 UBIQUITIN LIGASE BIG BROTHER-RELATED\",\"start\":\"18\",\"end\":\"305\"},{\"database\":\"MobiDBLite\",\"databaseDefinition\":\"mobidb-lite\",\"goId\":\"-\",\"goDefinition\":\"consensus disorder prediction\",\"start\":\"105\",\"end\":\"130\"},{\"database\":\"ProSiteProfiles\",\"databaseDefinition\":\"PS50089\",\"goId\":\"IPR001841\",\"goDefinition\":\"Zinc finger RING-type profile.\",\"start\":\"256\",\"end\":\"296\"},{\"database\":\"SMART\",\"databaseDefinition\":\"SM00184\",\"goId\":\"IPR001841\",\"goDefinition\":\"ring_2\",\"start\":\"256\",\"end\":\"296\"},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0003674\",\"goDefinition\":\"molecular_function\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0003824\",\"goDefinition\":\"catalytic activity\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0004842\",\"goDefinition\":\"ubiquitin-protein transferase activity\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0006464\",\"goDefinition\":\"protein modification process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0006508\",\"goDefinition\":\"proteolysis\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0006511\",\"goDefinition\":\"ubiquitin-dependent protein catabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0006807\",\"goDefinition\":\"obsolete nitrogen compound metabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0008150\",\"goDefinition\":\"biological_process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0008152\",\"goDefinition\":\"metabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0009056\",\"goDefinition\":\"catabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0009057\",\"goDefinition\":\"macromolecule catabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0009987\",\"goDefinition\":\"cellular process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0010498\",\"goDefinition\":\"proteasomal protein catabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0016567\",\"goDefinition\":\"protein ubiquitination\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0016740\",\"goDefinition\":\"transferase activity\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0019538\",\"goDefinition\":\"protein metabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0019787\",\"goDefinition\":\"ubiquitin-like protein transferase activity\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0019941\",\"goDefinition\":\"modification-dependent protein catabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0030163\",\"goDefinition\":\"protein catabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0032446\",\"goDefinition\":\"protein modification by small protein conjugation\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0036211\",\"goDefinition\":\"protein modification process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0043161\",\"goDefinition\":\"proteasome-mediated ubiquitin-dependent protein catabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0043170\",\"goDefinition\":\"macromolecule metabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0043412\",\"goDefinition\":\"macromolecule modification\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0043632\",\"goDefinition\":\"modification-dependent macromolecule catabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0044237\",\"goDefinition\":\"obsolete cellular metabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0044238\",\"goDefinition\":\"primary metabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0044248\",\"goDefinition\":\"obsolete cellular catabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0044257\",\"goDefinition\":\"protein catabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0044260\",\"goDefinition\":\"obsolete cellular macromolecule metabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0044265\",\"goDefinition\":\"obsolete cellular macromolecule catabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0044267\",\"goDefinition\":\"protein metabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0051603\",\"goDefinition\":\"obsolete proteolysis involved in protein catabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0051865\",\"goDefinition\":\"protein autoubiquitination\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0061630\",\"goDefinition\":\"ubiquitin protein ligase activity\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0061659\",\"goDefinition\":\"ubiquitin-like protein ligase activity\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0070647\",\"goDefinition\":\"protein modification by small protein conjugation or removal\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0071704\",\"goDefinition\":\"obsolete organic substance metabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:0140096\",\"goDefinition\":\"catalytic activity, acting on a protein\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:1901564\",\"goDefinition\":\"obsolete organonitrogen compound metabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:1901565\",\"goDefinition\":\"obsolete organonitrogen compound catabolic process\",\"start\":null,\"end\":null},{\"database\":\"eggNOG-mapper 2.1.15\",\"databaseDefinition\":\"orthology transfer\",\"goId\":\"GO:1901575\",\"goDefinition\":\"obsolete organic substance catabolic process\",\"start\":null,\"end\":null}],\"metabolism\":[]}",
+ "payload": {
+  "id": "FvesChr1G00279070.1",
+  "species": "Fragaria vesca",
+  "version": "v6.0(Horticulture Research. 2023)",
+  "displaySpecies": "Fragaria vesca",
+  "displayVersion": "Hawaii-4 T2T v6.0 (Zhou et al., 2023)",
+  "assemblies": [
+   {
+    "species": "Fragaria vesca",
+    "version": "v6.0(Horticulture Research. 2023)",
+    "displaySpecies": "Fragaria vesca",
+    "displayVersion": "Hawaii-4 T2T v6.0 (Zhou et al., 2023)",
+    "selected": true
+   }
+  ],
+  "proteinSequence": "MENHNAKLVPSGGLKPNPGEQEENPTLNRCGEEEEVNTESAEPPSPNAPQSSRTPFTNLSQVDADLALARTLQEQERAYMMLRMNNEGSDYGSWEAGSYVHDDEDDFHDDTDGNDDDEHYDGTDADNDEEDAFDVHAHEDAGDDHNPSVVYDPAVFSSDEAYARALQDAEDRDMAARLMAFAGIDDREAEDTENQGGNSQDAWEEVDPDELSYEELLALGEVVGTESRGLPADTIASLPSVSYKMGNGQNGSNESCAICRLDYEDGENLTVLSCTHSYHSECINNWLTINKVCPVCIAEVSTSGNS*",
+  "cdsSequence": "ATGGAGAACCACAACGCGAAATTGGTCCCAAGCGGTGGACTCAAACCTAACCCCGGCGAACAAGAAGAGAACCCTACTCTTAATCGTTGCGGAGAAGAAGAAGAAGTAAATACCGAATCGGCGGAGCCTCCTTCACCTAATGCCCCGCAGTCCTCAAGAACTCCCTTCACTAATCTCAGTCAGGTCGATGCTGATCTTGCTCTTGCTCGAACTCTCCAAGAACAGGAAAGGGCATACATGATGCTGAGAATGAACAATGAGGGAAGTGATTATGGCAGTTGGGAAGCTGGAAGTTATGTGCATGATGATGAGGATGATTTTCATGATGATACTGACGGAAATGACGATGATGAGCATTATGATGGAACTGATGCTGACAATGATGAAGAAGATGCATTTGATGTGCACGCTCATGAAGATGCTGGAGACGATCATAACCCCAGTGTGGTATATGATCCTGCTGTTTTTTCAAGTGATGAAGCGTATGCAAGAGCCCTGCAGGATGCTGAAGATAGAGATATGGCAGCTAGACTGATGGCCTTTGCAGGGATTGATGACCGTGAAGCTGAGGACACAGAGAATCAGGGAGGTAACTCTCAGGATGCATGGGAGGAGGTTGACCCAGATGAACTTTCATATGAGGAGTTACTTGCGTTGGGTGAAGTTGTTGGAACAGAGAGCAGAGGACTTCCTGCTGATACAATTGCCTCATTGCCTTCAGTAAGCTACAAGATGGGAAATGGTCAGAATGGAAGCAATGAGTCGTGTGCCATTTGTCGGTTAGATTATGAGGATGGTGAAAACTTGACAGTACTTTCTTGCACACACTCTTATCATTCTGAGTGCATAAATAATTGGTTGACAATAAACAAGGTCTGCCCAGTTTGCATTGCTGAAGTCTCCACGTCCGGAAACAGCTAG",
+  "kegg": [
+   {
+    "ko": "K19045",
+    "definition": "E3 ubiquitin ligase BIG"
+   }
+  ],
+  "geneFamilies": [
+   "zf-rbx1"
+  ],
+  "signalPeptide": null,
+  "geneOntology": [
+   {
+    "database": "Pfam",
+    "databaseDefinition": "PF13639",
+    "goId": "IPR001841",
+    "goDefinition": "Ring finger domain",
+    "start": "255",
+    "end": "296"
+   },
+   {
+    "database": "CDD",
+    "databaseDefinition": "cd16454",
+    "goId": "-",
+    "goDefinition": "RING-H2_PA-TM-RING",
+    "start": "256",
+    "end": "296"
+   },
+   {
+    "database": "Gene3D",
+    "databaseDefinition": "G3DSA:3.30.40.10",
+    "goId": "IPR013083",
+    "goDefinition": "Zinc/RING finger domain, C3HC4 (zinc finger)",
+    "start": "221",
+    "end": "302"
+   },
+   {
+    "database": "SUPERFAMILY",
+    "databaseDefinition": "SSF57850",
+    "goId": "-",
+    "goDefinition": "RING/U-box",
+    "start": "249",
+    "end": "302"
+   },
+   {
+    "database": "PANTHER",
+    "databaseDefinition": "PTHR47530",
+    "goId": "IPR043312",
+    "goDefinition": "E3 UBIQUITIN LIGASE BIG BROTHER-RELATED",
+    "start": "18",
+    "end": "305"
+   },
+   {
+    "database": "MobiDBLite",
+    "databaseDefinition": "mobidb-lite",
+    "goId": "-",
+    "goDefinition": "consensus disorder prediction",
+    "start": "105",
+    "end": "130"
+   },
+   {
+    "database": "ProSiteProfiles",
+    "databaseDefinition": "PS50089",
+    "goId": "IPR001841",
+    "goDefinition": "Zinc finger RING-type profile.",
+    "start": "256",
+    "end": "296"
+   },
+   {
+    "database": "SMART",
+    "databaseDefinition": "SM00184",
+    "goId": "IPR001841",
+    "goDefinition": "ring_2",
+    "start": "256",
+    "end": "296"
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0003674",
+    "goDefinition": "molecular_function",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0003824",
+    "goDefinition": "catalytic activity",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0004842",
+    "goDefinition": "ubiquitin-protein transferase activity",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0006464",
+    "goDefinition": "protein modification process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0006508",
+    "goDefinition": "proteolysis",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0006511",
+    "goDefinition": "ubiquitin-dependent protein catabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0006807",
+    "goDefinition": "obsolete nitrogen compound metabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0008150",
+    "goDefinition": "biological_process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0008152",
+    "goDefinition": "metabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0009056",
+    "goDefinition": "catabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0009057",
+    "goDefinition": "macromolecule catabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0009987",
+    "goDefinition": "cellular process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0010498",
+    "goDefinition": "proteasomal protein catabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0016567",
+    "goDefinition": "protein ubiquitination",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0016740",
+    "goDefinition": "transferase activity",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0019538",
+    "goDefinition": "protein metabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0019787",
+    "goDefinition": "ubiquitin-like protein transferase activity",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0019941",
+    "goDefinition": "modification-dependent protein catabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0030163",
+    "goDefinition": "protein catabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0032446",
+    "goDefinition": "protein modification by small protein conjugation",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0036211",
+    "goDefinition": "protein modification process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0043161",
+    "goDefinition": "proteasome-mediated ubiquitin-dependent protein catabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0043170",
+    "goDefinition": "macromolecule metabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0043412",
+    "goDefinition": "macromolecule modification",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0043632",
+    "goDefinition": "modification-dependent macromolecule catabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0044237",
+    "goDefinition": "obsolete cellular metabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0044238",
+    "goDefinition": "primary metabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0044248",
+    "goDefinition": "obsolete cellular catabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0044257",
+    "goDefinition": "protein catabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0044260",
+    "goDefinition": "obsolete cellular macromolecule metabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0044265",
+    "goDefinition": "obsolete cellular macromolecule catabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0044267",
+    "goDefinition": "protein metabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0051603",
+    "goDefinition": "obsolete proteolysis involved in protein catabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0051865",
+    "goDefinition": "protein autoubiquitination",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0061630",
+    "goDefinition": "ubiquitin protein ligase activity",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0061659",
+    "goDefinition": "ubiquitin-like protein ligase activity",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0070647",
+    "goDefinition": "protein modification by small protein conjugation or removal",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0071704",
+    "goDefinition": "obsolete organic substance metabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:0140096",
+    "goDefinition": "catalytic activity, acting on a protein",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:1901564",
+    "goDefinition": "obsolete organonitrogen compound metabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:1901565",
+    "goDefinition": "obsolete organonitrogen compound catabolic process",
+    "start": null,
+    "end": null
+   },
+   {
+    "database": "eggNOG-mapper 2.1.15",
+    "databaseDefinition": "orthology transfer",
+    "goId": "GO:1901575",
+    "goDefinition": "obsolete organic substance catabolic process",
+    "start": null,
+    "end": null
+   }
+  ],
+  "metabolism": []
+ }
+}

@@ -1,0 +1,1586 @@
+{
+  "capture": {
+    "url": "https://wheatomics.sdau.edu.cn/api/ppi/query?gene_ids=TraesCS1A02G013100%2CTraesCS5A02G391700&table=PPI_poppin",
+    "at": "2026-11-10T08:11:53.892680Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 24023,
+    "simulated": false,
+    "note": "真实抓取 2026-11-10；24,023 B；87 条边，rice_pair/supporting_edges/identity 原样保留"
+  },
+  "payload": {
+    "success": true,
+    "message": "ok",
+    "timestamp": "2026-11-10T07:54:03.400891+00:00",
+    "data": {
+      "interactions": [
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7B02G020800"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g11614-LOC_Os03g54160",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 2,
+          "identity1": 84.211,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS3A02G284400"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os01g52680-LOC_Os03g54160",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 87.113,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS3B02G318300"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os01g52680-LOC_Os03g54160",
+          "subgenome1": "B",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 87.245,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS3D02G284200"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os01g52680-LOC_Os03g54160",
+          "subgenome1": "D",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 87.755,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS6A02G158100"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os02g07430-LOC_Os03g54160",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 79.468,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS6B02G186700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os02g07430-LOC_Os03g54160",
+          "subgenome1": "B",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 78.409,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS6D02G147400"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os02g07430-LOC_Os03g54160",
+          "subgenome1": "D",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 79.468,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS6A02G259000"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os02g45770-LOC_Os03g54160",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.615,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS6B02G286400"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os02g45770-LOC_Os03g54160",
+          "subgenome1": "B",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.556,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS6D02G240200"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os02g45770-LOC_Os03g54160",
+          "subgenome1": "D",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.615,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS6A02G292300"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os02g49840-LOC_Os03g54160",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 82.917,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS6B02G322700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os02g49840-LOC_Os03g54160",
+          "subgenome1": "B",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 83.333,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS6D02G273500"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os02g49840-LOC_Os03g54160",
+          "subgenome1": "D",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 82.083,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G515500"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g03070-LOC_Os03g54160",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 65.471,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4B02G346700"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g03070-LOC_Os03g54160",
+          "subgenome1": "B",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 60.776,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4D02G341700"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g03070-LOC_Os03g54160",
+          "subgenome1": "D",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 66.222,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4A02G002600"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g08754-LOC_Os03g54160",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 72.781,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4B02G302600"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g08754-LOC_Os03g54160",
+          "subgenome1": "B",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 77.922,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4D02G301100"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g08754-LOC_Os03g54160",
+          "subgenome1": "D",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 78.355,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7A02G122100"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g11614-LOC_Os03g54160",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 72.5,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4D02G243700"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g11614-LOC_Os03g54160",
+          "subgenome1": "D",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 72.245,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS2A02G121200"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g22810-LOC_Os03g54160",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 82.895,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7B02G197300"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g22810-LOC_Os03g54160",
+          "subgenome1": "B",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 66.216,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS2D02G123300"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g22810-LOC_Os03g54160",
+          "subgenome1": "D",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.868,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4A02G265100"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g50810-LOC_Os03g54160",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 86.594,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4B02G049800"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g50810-LOC_Os03g54160",
+          "subgenome1": "B",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 86.957,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4D02G050200"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g50810-LOC_Os03g54160",
+          "subgenome1": "D",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 87.319,
+          "identity2": 84.211
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391800"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os03g54170",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 75.431
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5B02G396700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os03g54170",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 75.431
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5D02G401700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os03g54170",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 77.253
+        },
+        {
+          "wheat_id1": [
+            "TraesCS2A02G398900"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os04g48416",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 87.411
+        },
+        {
+          "wheat_id1": [
+            "TraesCS2B02G416900"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os04g48416",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 87.143
+        },
+        {
+          "wheat_id1": [
+            "TraesCS2D02G396400"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os04g48416",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 86.409
+        },
+        {
+          "wheat_id1": [
+            "TraesCS1A02G083100"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os05g04820",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 92.308
+        },
+        {
+          "wheat_id1": [
+            "TraesCS1B02G100600"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os05g04820",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 92.343
+        },
+        {
+          "wheat_id1": [
+            "TraesCS1D02G084400"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os05g04820",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 92.541
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7A02G144600"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os06g03600",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 66.628
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7B02G047100"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os06g03600",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 68.057
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7D02G050000"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os06g03600",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 66.628
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7A02G122000"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os06g06750",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 80.87
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7D02G120500"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os06g06750",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 79.476
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7A02G383800"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os06g49840",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 83.122
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7B02G286600"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os06g49840",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 86.463
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7D02G380300"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os06g49840",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 85.59
+        },
+        {
+          "wheat_id1": [
+            "TraesCS2A02G261200"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os07g01820",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 80.797
+        },
+        {
+          "wheat_id1": [
+            "TraesCS2B02G281000"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os07g01820",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 80.505
+        },
+        {
+          "wheat_id1": [
+            "TraesCS2D02G262700"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os07g01820",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 82.051
+        },
+        {
+          "wheat_id1": [
+            "TraesCS2A02G174300"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os07g41370",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 73.384
+        },
+        {
+          "wheat_id1": [
+            "TraesCS2B02G200800"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os07g41370",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 73.764
+        },
+        {
+          "wheat_id1": [
+            "TraesCS2D02G181400"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os07g41370",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 73.764
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7A02G260600"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os08g41950",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 86.345
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7B02G158600"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os08g41950",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 85.542
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS7D02G261600"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os08g41950",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 86.345
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G522100"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os08g43170",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 79.614
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4B02G353100"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os08g43170",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 79.399
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4D02G347100"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os08g43170",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 79.185
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5B02G208700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os09g26999",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 77.119
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G286800"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os09g32948",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 87.352
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5B02G286100"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os09g32948",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 86.166
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5D02G294500"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os09g32948",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 87.352
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G319200"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os09g36160",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 70.336
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5B02G319600"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os09g36160",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 70.336
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5D02G325400"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os09g36160",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 70.336
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G093700"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os10g08940",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 80.48
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5B02G099800"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os10g08940",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 80.46
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5D02G106000"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os10g08940",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 80.271
+        },
+        {
+          "wheat_id1": [
+            "TraesCS1A02G160200"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os10g34350",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 86.189
+        },
+        {
+          "wheat_id1": [
+            "TraesCS1B02G176400"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os10g34350",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 84.848
+        },
+        {
+          "wheat_id1": [
+            "TraesCS1D02G157400"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os10g34350",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 87.273
+        },
+        {
+          "wheat_id1": [
+            "TraesCS1A02G199600"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os10g39130",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 71.739
+        },
+        {
+          "wheat_id1": [
+            "TraesCS1B02G214500"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os10g39130",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 70.563
+        },
+        {
+          "wheat_id1": [
+            "TraesCS1D02G203300"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os10g39130",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 73.478
+        },
+        {
+          "wheat_id1": [
+            "TraesCS1A02G193200"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os10g42430",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 75.63
+        },
+        {
+          "wheat_id1": [
+            "TraesCS1B02G208000"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os10g42430",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 79.552
+        },
+        {
+          "wheat_id1": [
+            "TraesCS1D02G196900"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os10g42430",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 79.19
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4A02G209400"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os11g06340",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 94.203
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4B02G142300LC"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os11g06340",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 95.588
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4D02G110400"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os11g06340",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 95.652
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4A02G251900"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os11g41850",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 79.167
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4B02G062900"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os11g41850",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 78.958
+        },
+        {
+          "wheat_id1": [
+            "TraesCS4D02G061900"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os11g41850",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 79.375
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G143200"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os12g03040",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 64.286
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5B02G142100"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os12g03040",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 63.526
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5D02G148800"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os12g03040",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 63.939
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G117500"
+          ],
+          "wheat_id2": [
+            "TraesCS5A02G391700"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os12g10540",
+          "subgenome1": "A",
+          "subgenome2": "A",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 78.988
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5B02G115100"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os12g10540",
+          "subgenome1": "A",
+          "subgenome2": "B",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 85.526
+        },
+        {
+          "wheat_id1": [
+            "TraesCS5A02G391700"
+          ],
+          "wheat_id2": [
+            "TraesCS5D02G118200"
+          ],
+          "eggnog_id1": "",
+          "eggnog_id2": "",
+          "annotation1": "",
+          "annotation2": "",
+          "rice_pair": "LOC_Os03g54160-LOC_Os12g10540",
+          "subgenome1": "A",
+          "subgenome2": "D",
+          "supporting_edges": 1,
+          "identity1": 84.211,
+          "identity2": 79.216
+        }
+      ]
+    }
+  }
+}

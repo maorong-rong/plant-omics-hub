@@ -1,0 +1,25 @@
+{
+  "capture": {
+    "url": "https://wheatomics.sdau.edu.cn/api/genes/resolve?ID=TraesCS1A01G018500LC",
+    "at": "2026-11-10T14:11:53.702353Z",
+    "capturedAt": "2026-11-10T14:11:53.702380Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 142,
+    "sourceSha256": "BC7639421B6AD407B9CA457E38DC6EB7AB272D08AAC8B6EB9B536085F538ED03",
+    "rawBodySource": "re-collected",
+    "simulated": false,
+    "note": "真实抓取 2026-11-10；01G 编号在 resolve 里 count=0（上游没有 01G 行），用于说明 01G 只能走 id-conversion"
+  },
+  "rawBody": "{\"success\":true,\"message\":\"ok\",\"timestamp\":\"2026-11-10T14:11:53.673696+00:00\",\"data\":{\"query\":\"TraesCS1A01G018500LC\",\"count\":0,\"mappings\":[]}}",
+  "payload": {
+    "success": true,
+    "message": "ok",
+    "timestamp": "2026-11-10T14:11:53.673696+00:00",
+    "data": {
+      "query": "TraesCS1A01G018500LC",
+      "count": 0,
+      "mappings": []
+    }
+  }
+}

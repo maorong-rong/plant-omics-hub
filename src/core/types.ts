@@ -1,0 +1,183 @@
+import type { CatalogServiceKey } from './catalog-services.js';
+
+/**
+ * 核心契约 —— 整个仓库只有这一份「什么是源 / 什么是工具」的定义。
+ *
+ * 设计原则（见 docs/架构.md §2）：
+ *   1. 工具的入参 schema 是**纯 JSON Schema**，不是 zod、也不是某个框架的对象。
+ *      因为两个出口要共用同一份定义：MCP 的 tools/list 直接吃 JSON Schema，
+ *      dsh 的 ToolDefinition.parameters 也是 JSON Schema。写两遍必然漂移。
+ *   2. 工具返回**已经排好版给人看的文本**，不把原始 JSON 直接丢给模型。
+ *      上游返回 600 KB 是常事（见 expression_projects 的教训），
+ *      输出设计本身就是工具设计的一部分。
+ */
+
+/**
+ * 源的可编程接入等级 —— 来源于《MaizeGDB API 可用性核查》的结论：
+ * 「文档说它有 API」和「我能脚本化地调到它」是两件事。
+ *
+ * - T1 有文档化的 JSON 接口（OpenAPI / REST 文档 / 官方示例）
+ * - T2 无文档，但参数化 URL 稳定（老派 PHP/Perl 站点的常态）
+ * - T3 只有网页 / 要过 Cloudflare / 要登录 —— **不写代码**，只登记
+ */
+export type AccessTier = 'T1' | 'T2' | 'T3';
+
+/** 最近一次本机实测结果，由 `npm run probe` 产生，写进 docs/源登记表.md。 */
+export interface ProbeRecord {
+  /** YYYY-MM-DD */
+  date: string;
+  ok: boolean;
+  status?: number;
+  ms?: number;
+  note?: string;
+}
+
+/** 一个数据源自报的元信息。没有这个东西的源不许进 src/sources/。 */
+export interface SourceManifest {
+  /** 小写短名，同时是工具名前缀，如 `wheatomics` */
+  id: string;
+  /** 大众称呼，格式：`中文常用名（原名简称）`，如「小麦多组学平台（WheatOmics）」 */
+  displayName: string;
+  /**
+   * 该源对外能提供的研究服务，取 `/catalog` 顶层字典里的 key（`SERVICES_CATALOG`）。
+   *
+   * **必须显式声明、不许从工具名推断**（契约 v1.2 §三.1 规则 2）：推断会造出
+   * “这个源支持变异查询”而实际只有数据集目录的假象。宁可少列——列了一个查不到的服务，
+   * 比不列更伤。
+   */
+  services: readonly CatalogServiceKey[];
+  homepage: string;
+  /** 不带尾斜杠，如 `https://wheatomics.sdau.edu.cn/api` */
+  apiBase: string;
+  tier: AccessTier;
+  /** 人类可读的接口文档地址（T1 必填，T2 填最接近的说明页） */
+  docs?: string;
+  auth: 'none' | 'api-key' | 'login';
+  /** 主要覆盖的物种，用拉丁名 */
+  species: string[];
+  /** 本机实测的可达性。中国站点经常「浏览器能开、脚本调不动」，必须显式记录 */
+  network: 'direct' | 'proxy-required' | 'unknown';
+  /**
+   * probe 脚本用来判活的请求（相对 apiBase）。
+   * `expect` 决定判活标准：T1 源必须是能解析的 JSON 且业务信封非失败；
+   * T2 源可能返回 HTML，用 `any`（只看状态码），解析正确性交给离线 fixture 测试。
+   */
+  probe: { path: string; expectStatus?: number; expect?: 'json' | 'any' };
+  lastProbe?: ProbeRecord;
+  /** 这个源容易踩的坑，一句话一条，会在工具描述里透出 */
+  caveats?: string[];
+  /**
+   * 该源对外承诺的数据版本口径（组装版本 / 注释版本 / 版本未知）。
+   * 写不准就写"未知"，**不许按 ID 外观猜**。
+   */
+  versionNote?: string;
+}
+
+/** 只覆盖本仓库实际用到的 JSON Schema 子集。够用即可，不追求完备。 */
+export interface JsonSchema {
+  type?: 'object' | 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'null';
+  title?: string;
+  description?: string;
+  properties?: Record<string, JsonSchema>;
+  required?: string[];
+  items?: JsonSchema;
+  enum?: Array<string | number | boolean>;
+  default?: unknown;
+  minimum?: number;
+  maximum?: number;
+  minItems?: number;
+  maxItems?: number;
+  additionalProperties?: boolean | JsonSchema;
+}
+
+export interface HttpOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  /** 失败重试次数（仅对网络错误 / 5xx / 429 生效，4xx 不重试） */
+  retries?: number;
+  headers?: Record<string, string>;
+  /**
+   * HTTP 方法；缺省 `GET`（既有 GET 调用点的请求头/请求体逐字不变）。
+   * POST 只允许走 `src/core/request.ts` 的 `POST_ENDPOINTS` 白名单。
+   */
+  method?: 'GET' | 'POST';
+  /** POST 的已序列化 JSON 请求体；仅 method=POST 时允许。 */
+  body?: string;
+  /** 单次调用（含重试与退避）的总时长上限；缺省沿用共享层默认值。 */
+  maxTotalMs?: number;
+}
+
+export interface HttpResult<T = unknown> {
+  data: T;
+  url: string;
+  status: number;
+  durationMs: number;
+  attempts: number;
+  /** 实际响应类型；可选以兼容已有fixture和自定义Fetcher。 */
+  contentType?: string;
+  /**
+   * 上游响应头（**白名单**：只保留 `x-*` 自定义头，键为小写）。
+   *
+   * 为什么要它：总量、分页游标、版本号常放在自定义头里（UniProt 的
+   * `x-total-results`、EBI 的游标）。此前 HttpResult 根本不传头，源层只能看 `data`，
+   * 于是"真 0 条"和"上游没给计数"无法区分——**一个值、两个语义**。
+   *
+   * **缺头 ≠ 0**：字段缺失表示上游没给，值为 `'0'` 才是"给了 0"。源层不许用 `?? 0` 兜底。
+   * 可选字段：已有 fixture 与自定义 Fetcher 不必提供。
+   */
+  headers?: Readonly<Record<string, string>>;
+  /** empty仅指读取后零长度正文；json表示解析成功。缺字段表示未知，不等于empty。 */
+  bodyKind?: 'empty' | 'json';
+}
+
+export type Fetcher = <T = unknown>(url: string, opts?: HttpOptions) => Promise<HttpResult<T>>;
+
+/** 工具运行时环境。测试里把 `http` 换成 fixture 回放即可，不需要联网。 */
+export interface ToolContext {
+  http: Fetcher;
+  signal?: AbortSignal;
+}
+
+export interface ToolResultMeta {
+  sourceId: string;
+  /** 完整请求（含查询参数），用于复现 */
+  request: string;
+  /** 完整 URL */
+  url: string;
+  status: number;
+  durationMs: number;
+  /** 查询时刻，ISO 8601 */
+  at: string;
+}
+
+export interface ToolResult {
+  /** 给模型看的成品文本（已排版，含出处尾注） */
+  text: string;
+  /** 可选的原始结构，便于程序化消费与调试；不进模型上下文 */
+  raw?: unknown;
+  /**
+   * 仅在批量/导出模式且调用方显式开启时提供。
+   *
+   * 为什么需要它：正文有 1408 字节预算，装不下 50 条蛋白序列；导出层要的是
+   * 「完整记录 + 可复算计数」，不是给人读的摘要。MCP 出口把它作为
+   * `structuredContent` 返回——普通工具不设置该字段，模型上下文不受影响。
+   */
+  structured?: Record<string, unknown>;
+  meta: ToolResultMeta;
+}
+
+export interface ToolDefinition {
+  /** 全局唯一。命名 `<sourceId>_<动词短语>`，例如 `wheatomics_search_known_genes` */
+  name: string;
+  /** 说清「什么时候该用它」，而不是「它内部做了什么」 */
+  description: string;
+  parameters: JsonSchema;
+  run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult>;
+}
+
+export interface SourceBundle {
+  manifest: SourceManifest;
+  tools: ToolDefinition[];
+  /** 源专属探活断言；失败必须抛错，不替代各业务工具验证。 */
+  validateProbe?: (payload: unknown) => void;
+}

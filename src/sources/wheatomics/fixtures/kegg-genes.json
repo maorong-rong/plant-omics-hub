@@ -1,0 +1,28 @@
+{
+  "capture": {
+    "url": "https://wheatomics.sdau.edu.cn/api/kegg/genes?pathway=ko04726&genes=TraesCS1A02G045300.1,TraesCS1A02G013100.1",
+    "at": "2026-11-10T14:11:52.408269Z",
+    "capturedAt": "2026-11-10T14:11:52.408428Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 206,
+    "sourceSha256": "236FCCB5B490478C02A52485303634B3B3471D8FC1CB2DF90866D279E0775635",
+    "rawBodySource": "re-collected",
+    "simulated": false,
+    "note": "真实抓取 2026-11-10；ko04726 命中 2 个送检基因中的 1 个，ko_details 给 KO 号与描述"
+  },
+  "rawBody": "{\"pathway\":\"ko04726\",\"genes\":[\"TraesCS1A02G045300.1\"],\"ko_details\":[{\"gene_id\":\"TraesCS1A02G045300.1\",\"ko\":\"K21278\",\"ko_description\":\"DUSP1; dual specificity protein phosphatase 1 [EC:3.1.3.16 3.1.3.48]\"}]}",
+  "payload": {
+    "pathway": "ko04726",
+    "genes": [
+      "TraesCS1A02G045300.1"
+    ],
+    "ko_details": [
+      {
+        "gene_id": "TraesCS1A02G045300.1",
+        "ko": "K21278",
+        "ko_description": "DUSP1; dual specificity protein phosphatase 1 [EC:3.1.3.16 3.1.3.48]"
+      }
+    ]
+  }
+}

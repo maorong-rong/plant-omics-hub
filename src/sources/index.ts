@@ -1,0 +1,162 @@
+/**
+ * 默认注册表 —— 新源在这里登记一行。
+ *
+ * 保持「一个文件说清现在有哪些源」，是刻意的：源清单必须能一眼看完，
+ * 散在各处的 import 会让「到底支持了什么」变成考古。
+ *
+ * 支持**只启用一部分源**，便于按需加载：
+ * 别人 fork 这个仓库时，通常只想装自己关心的那几个库，不该被迫全量加载。
+ */
+
+import { PlantOmicsError } from '../core/errors.js';
+import { ToolRegistry } from '../core/registry.js';
+import type { SourceBundle } from '../core/types.js';
+import { manifest as wheatomicsManifest } from './wheatomics/manifest.js';
+import { tools as wheatomicsTools } from './wheatomics/tools.js';
+import { validateProbe as validateWheatomicsProbe } from './wheatomics/probe.js';
+import { manifest as strawberryManifest } from './strawberry/manifest.js';
+import { tools as strawberryTools } from './strawberry/tools.js';
+import { validateProbe as validateStrawberryProbe } from './strawberry/probe.js';
+
+import { manifest as gwhManifest } from './gwh/manifest.js';
+import { tools as gwhTools } from './gwh/tools.js';
+import { validateProbe as validateGwhProbe } from './gwh/probe.js';
+import { manifest as icgManifest } from './icg/manifest.js';
+import { tools as icgTools } from './icg/tools.js';
+import { validateProbe as validateIcgProbe } from './icg/probe.js';
+import { manifest as ic4rManifest } from './ic4r/manifest.js';
+import { tools as ic4rTools } from './ic4r/tools.js';
+import { validateProbe as validateIc4rProbe } from './ic4r/probe.js';
+import { manifest as grameneManifest } from './gramene/manifest.js';
+import { tools as grameneTools } from './gramene/tools.js';
+import { validateProbe as validateGrameneProbe } from './gramene/probe.js';
+import { manifest as scodManifest } from './scod/manifest.js';
+import { tools as scodTools } from './scod/tools.js';
+import { validateProbe as validateScodProbe } from './scod/probe.js';
+import { manifest as ensemblPlantsManifest } from './ensemblplants/manifest.js';
+import { tools as ensemblPlantsTools } from './ensemblplants/tools.js';
+import { validateProbe as validateEnsemblPlantsProbe } from './ensemblplants/probe.js';
+import { manifest as stringManifest } from './string/manifest.js';
+import { tools as stringTools } from './string/tools.js';
+import { validateProbe as validateStringProbe } from './string/probe.js';
+import { manifest as interproManifest } from './interpro/manifest.js';
+import { tools as interproTools } from './interpro/tools.js';
+import { validateProbe as validateInterproProbe } from './interpro/probe.js';
+import { manifest as uniprotManifest } from './uniprot/manifest.js';
+import { tools as uniprotTools } from './uniprot/tools.js';
+import { validateProbe as validateUniprotProbe } from './uniprot/probe.js';
+import { createHubTools } from '../retrieval/index.js';
+import { assertSubsetBudget } from '../service/budget.js';
+import { speciesNameZh } from '../service/species-names.js';
+
+const bundles: SourceBundle[] = [
+  { manifest: wheatomicsManifest, tools: wheatomicsTools, validateProbe: validateWheatomicsProbe },
+  { manifest: strawberryManifest, tools: strawberryTools, validateProbe: validateStrawberryProbe },
+  { manifest: gwhManifest, tools: gwhTools, validateProbe: validateGwhProbe },
+  { manifest: icgManifest, tools: icgTools, validateProbe: validateIcgProbe },
+  { manifest: ic4rManifest, tools: ic4rTools, validateProbe: validateIc4rProbe },
+  { manifest: grameneManifest, tools: grameneTools, validateProbe: validateGrameneProbe },
+  { manifest: scodManifest, tools: scodTools, validateProbe: validateScodProbe },
+  // Ensembl Plants：本批只接 3 个（lookup / sequence / xrefs）。
+  // 批量 `POST /lookup/id` 未接——公共层目前只发 GET，需要先开非 GET 的口子，
+  // 详见 manifest.caveats 与「已知缺口」。
+  { manifest: ensemblPlantsManifest, tools: ensemblPlantsTools, validateProbe: validateEnsemblPlantsProbe },
+  // STRING：T1，probe 用 /json/version；只接 resolve_ids 与 interaction_partners 两个入口。
+  // 未接 interactions（/api/json/interactions 只处理 1 个标识符、1 个物种），见 manifest.caveats。
+  { manifest: stringManifest, tools: stringTools, validateProbe: validateStringProbe },
+  // UniProt：T1，probe 用 /rest/.../search 的固定查询。首批两个工具
+  // （uniprot_search_proteins / uniprot_get_entry）；R11 审查通过，绑定 tools.ts `0115D15F…`。
+  { manifest: uniprotManifest, tools: uniprotTools, validateProbe: validateUniprotProbe },
+  // InterPro/Pfam：**参考数据集源（第 11 源）**，不提供物种组学数据，只给域模型 HMM。
+  { manifest: interproManifest, tools: interproTools, validateProbe: validateInterproProbe },
+];
+
+export interface RegistryOptions {
+  /**
+   * 只启用这些源 id（不传 = 全部启用）。
+   * 传了未知 id 直接抛错——不然拼错一个字母会静默得到零工具，
+   * 这种「装上了但什么都没有」是最难查的失效。
+   */
+  enabled?: readonly string[];
+}
+
+export function createRegistry(options: RegistryOptions = {}): ToolRegistry {
+  const wanted = (options.enabled ?? []).map((id) => id.trim()).filter(Boolean);
+  const known = knownSourceIds();
+
+  if (wanted.length > 0) {
+    const unknown = wanted.filter((id) => !known.includes(id));
+    if (unknown.length > 0) {
+      throw new PlantOmicsError(
+        `未知的源 id：${unknown.join(', ')}。已登记的源：${known.join(', ')}`,
+      );
+    }
+  }
+
+  const enabled = wanted.length > 0 ? new Set(wanted) : null;
+  const registry = new ToolRegistry();
+  for (const bundle of bundles) {
+    if (enabled && !enabled.has(bundle.manifest.id)) continue;
+    registry.register(bundle);
+  }
+
+  /**
+   * 物种中文名门禁（契约 v1.2 §三.1 规则 3）：任何一个已注册源的物种缺中文映射，就拒绝启动。
+   *
+   * 为什么放在**启动**而不是请求期：请求期抛会把 500 甩给用户，而且只在他们正好问到这个源时
+   * 才暴露；启动就红，接源的人在本地第一次跑就看见。宁可起不来，也不许页面中英混排。
+   */
+  for (const bundle of registry.listSources()) {
+    for (const latin of bundle.manifest.species) speciesNameZh(latin);
+  }
+  // 检索层入口（`hub_*`）：不属于任何源，走 registerMetaTool——
+  // 计入工具预算、不计入源数。装配点放这里，是因为 `src/sources/index.ts`
+  // 是"有哪些源"的唯一清单，元工具由它统一挂上，避免两处都能注册。
+  for (const tool of createHubTools(registry)) registry.registerMetaTool(tool);
+  /**
+   * v2.3 唯一硬阈值：**单次订阅集 ≤ 80 工具**，在这里做、而且只在这里做。
+   *
+   * 为什么在 createRegistry 而不是各个入口：订阅集有两条入口——环境变量
+   * `PLANTOMICS_SOURCES`（MCP / DSH 出口）与请求头 `x-plantomics-sources`（HTTP 出口）。
+   * 之前只有请求头那条调 assertSubsetBudget，于是**同一个 81 工具的集合**，
+   * 走环境变量能起、走请求头被 400 拒绝——同一件事两条路两种结果，用户只会以为是个别入口的问题。
+   * 摆在这个共同汇合点以后，两条入口对称生效；加断言钉住"同一组源、两条入口结果一致"。
+   *
+   * 未指定 enabled（用全库默认集）时不经过这里：默认集是软建议 ≤40，只警示不拦截。
+   */
+  if (enabled) assertSubsetBudget(registry.listTools().length);
+  // 创建后不可变（契约 v1.2）：generatedAt 因此天然稳定，不需要失效机制。
+  // **必须放在全部 register/registerMetaTool 之后**——否则 seal 之后挂元工具会直接抛。
+  registry.seal();
+  return registry;
+}
+
+/**
+ * 解析一串源 id（逗号 / 分号 / 空白分隔）。
+ *
+ * 环境变量 `PLANTOMICS_SOURCES` 与 HTTP 服务层的请求头 `x-plantomics-sources`
+ * **共用这一个解析**：同一件事只许有一种切法，否则 `a,b` 与 `a b` 会得出不同结果。
+ * 空串、只有分隔符、只有空白 → undefined（表示"没有指定"，不是"空集合"）。
+ */
+export function parseSourceList(raw: string | undefined): string[] | undefined {
+  const text = (raw ?? '').trim();
+  if (!text) return undefined;
+  const ids = text
+    .split(/[,;\s]+/)
+    .map((id) => id.trim())
+    .filter(Boolean);
+  return ids.length > 0 ? ids : undefined;
+}
+
+/** 已登记的源 id（报错信息用；不构造注册表）。 */
+export function knownSourceIds(): string[] {
+  return bundles.map((bundle) => bundle.manifest.id);
+}
+
+/** 从环境变量读启用清单（逗号/分号/空白分隔）。MCP 与 dsh 两条出口都用它。 */
+export function enabledSourcesFromEnv(env: NodeJS.ProcessEnv = process.env): string[] | undefined {
+  return parseSourceList(env.PLANTOMICS_SOURCES);
+}
+
+export const registry = createRegistry({ enabled: enabledSourcesFromEnv() });
+export default registry;

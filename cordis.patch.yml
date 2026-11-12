@@ -1,0 +1,33 @@
+# ============================================================================
+# PlantOmics Hub —— bundle patch
+#
+# 两条目，职责分离：
+#   1) 本插件自身：只提供侧边栏面板，**不注册任何工具**。
+#      `name` 必须等于**实际安装后的包名**——宿主对 unknown name 的 Loader 行
+#      是静默跳过，写错的表现就是「装了但面板和工具都没出现」。
+#   2) 宿主自带的 MCP 客户端，连我们的 Streamable HTTP 服务；
+#      工具清单由服务端决定，不在本包内。
+#
+# 注意 `!!js` 表达式的写法：整条表达式必须用双引号包成 YAML 字符串。
+# 不加引号时 `{ authorization: ... }` 会被 YAML 当成 flow mapping 解析，
+# 直接报 "Nested mappings are not allowed in compact mappings"，
+# 宿主加载 patch 时就会失败——这是本文件历史上真实犯过的错。
+#
+# 环境变量：
+#   PLANTOMICS_HUB_URL    服务地址（默认本机回环）
+#   PLANTOMICS_HUB_TOKEN  静态 Bearer token（远程部署必填）
+#
+# 装法：DSH 侧边栏「插件」页 → 添加插件 → 粘贴 npm pack 出来的 tgz 绝对路径。
+# ============================================================================
+
+- insert:
+    - id: plant-omics
+      name: plantomics-hub
+    - id: plantomics-hub-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: plantomics-hub
+        transport: streamable-http
+        url: !!js "process.env.PLANTOMICS_HUB_URL || 'http://127.0.0.1:8971/mcp'"
+        headers: !!js "process.env.PLANTOMICS_HUB_TOKEN ? { authorization: 'Bearer ' + process.env.PLANTOMICS_HUB_TOKEN } : {}"
+        failOnStartupError: true

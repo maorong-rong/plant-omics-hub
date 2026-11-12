@@ -1,0 +1,51 @@
+{
+ "capture": {
+  "at": "2026-11-11T05:29:43Z",
+  "url": "https://sci.hainanu.edu.cn/strawberry/api/v1/synteny/search?geneId=FxaC_11g18370&sourceAssembly=fxa_camarosa&targetAssembly=fxa_benihoppe",
+  "status": 200,
+  "contentType": "application/json",
+  "originalBytes": 726,
+  "trimmed": [],
+  "rawBodySource": "re-collected",
+  "payloadRelation": "verbatim",
+  "capturedAt": "2026-11-11T05:29:43Z",
+  "rawBodyCollectedAt": "2026-11-11T05:29:43Z",
+  "sourceSha256": "495C5292B1EA8A6F4539B4A3467B0079BA27CC827D3004BD45D9EE979819CFC3"
+ },
+ "rawBody": "{\"analysisId\":\"fragaria-synteny-v2-seolhyang-20260914\",\"requestedGeneId\":\"FxaC_11g18370\",\"queryGene\":{\"canonicalId\":\"FxaC_11g18370\",\"displayId\":\"FxaC_11g18370\",\"seqId\":\"Fvb3-3\",\"start\":9643181,\"end\":9644518,\"strand\":\"-\",\"order\":1477},\"sourceAssembly\":{\"id\":\"fxa_camarosa\",\"species\":\"Fragaria × ananassa\",\"label\":\"Camarosa v1.0.a2\",\"version\":\"v1.0.a2(Horticulture Research. 2021)\",\"ploidy\":8,\"geneCount\":108439,\"exampleGene\":\"FxaC_4g00010\"},\"targetAssembly\":{\"id\":\"fxa_benihoppe\",\"species\":\"Fragaria × ananassa\",\"label\":\"Benihoppe v1.0.a1\",\"version\":\"Benihoppe v1.0.a1(Horticulture Research. 2023)\",\"ploidy\":8,\"geneCount\":109320,\"exampleGene\":\"Fxa1Ag00001\"},\"anchored\":false,\"totalBlockCount\":0,\"truncated\":false,\"blocks\":[]}",
+ "payload": {
+  "analysisId": "fragaria-synteny-v2-seolhyang-20260914",
+  "requestedGeneId": "FxaC_11g18370",
+  "queryGene": {
+   "canonicalId": "FxaC_11g18370",
+   "displayId": "FxaC_11g18370",
+   "seqId": "Fvb3-3",
+   "start": 9643181,
+   "end": 9644518,
+   "strand": "-",
+   "order": 1477
+  },
+  "sourceAssembly": {
+   "id": "fxa_camarosa",
+   "species": "Fragaria × ananassa",
+   "label": "Camarosa v1.0.a2",
+   "version": "v1.0.a2(Horticulture Research. 2021)",
+   "ploidy": 8,
+   "geneCount": 108439,
+   "exampleGene": "FxaC_4g00010"
+  },
+  "targetAssembly": {
+   "id": "fxa_benihoppe",
+   "species": "Fragaria × ananassa",
+   "label": "Benihoppe v1.0.a1",
+   "version": "Benihoppe v1.0.a1(Horticulture Research. 2023)",
+   "ploidy": 8,
+   "geneCount": 109320,
+   "exampleGene": "Fxa1Ag00001"
+  },
+  "anchored": false,
+  "totalBlockCount": 0,
+  "truncated": false,
+  "blocks": []
+ }
+}

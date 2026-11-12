@@ -1,0 +1,244 @@
+{
+  "capture": {
+    "url": "https://data.gramene.org/v69/genes?idList=Os03g0215400&idList=Os03g0215400",
+    "at": "2026-11-11T05:28:19.941Z",
+    "status": 200,
+    "originalBytes": 23316,
+    "contentType": "application/json; charset=utf-8",
+    "trimmed": "删除 xrefs（外部交叉引用，占响应主体）与 gene_idx；_id/name/description/biotype/taxon_id/system_name/db_type/location/gene_structure 原样保留",
+    "note": "阳性对照：OsMADS1/LHS1 的 RAP-DB Os03g0215400（同一基因的 MSU LOC_Os03g11614 在 genes-msu-zero.json 回 0 条）。证明回 0 是 ID 空间不认，不是物种里没有这个基因"
+  },
+  "payload": [
+    {
+      "_id": "Os03g0215400",
+      "name": "LHS1",
+      "description": null,
+      "biotype": "protein_coding",
+      "taxon_id": 39947001,
+      "system_name": "oryza_sativa",
+      "db_type": "core",
+      "location": {
+        "region": "3",
+        "start": 6052902,
+        "end": 6061365,
+        "strand": -1,
+        "map": "GCA_001433935.1"
+      },
+      "gene_structure": {
+        "exons": [
+          {
+            "id": "Os03t0215400-01-E1",
+            "start": 1,
+            "end": 276
+          },
+          {
+            "id": "Os03t0215400-01-E2",
+            "start": 5807,
+            "end": 5879
+          },
+          {
+            "id": "Os03t0215400-01-E3",
+            "start": 6650,
+            "end": 6711
+          },
+          {
+            "id": "Os03t0215400-01-E4",
+            "start": 6832,
+            "end": 6931
+          },
+          {
+            "id": "Os03t0215400-01-E5",
+            "start": 7139,
+            "end": 7180
+          },
+          {
+            "id": "Os03t0215400-01-E6",
+            "start": 7271,
+            "end": 7312
+          },
+          {
+            "id": "Os03t0215400-01-E7",
+            "start": 7531,
+            "end": 7685
+          },
+          {
+            "id": "Os03t0215400-01-E8",
+            "start": 8064,
+            "end": 8464
+          }
+        ],
+        "transcripts": [
+          {
+            "exons": [
+              "Os03t0215400-01-E1",
+              "Os03t0215400-01-E2",
+              "Os03t0215400-01-E3",
+              "Os03t0215400-01-E4",
+              "Os03t0215400-01-E5",
+              "Os03t0215400-01-E6",
+              "Os03t0215400-01-E7",
+              "Os03t0215400-01-E8"
+            ],
+            "length": 1151,
+            "exon_junctions": [
+              276,
+              349,
+              411,
+              511,
+              553,
+              595,
+              750
+            ],
+            "cds": {
+              "start": 92,
+              "end": 865
+            },
+            "translation": {
+              "id": "Os03t0215400-01",
+              "length": 257,
+              "features": {
+                "domain": {
+                  "entries": [
+                    {
+                      "name": "PF00319",
+                      "description": "SRF-TF",
+                      "db": "Pfam",
+                      "interpro": "IPR002100",
+                      "start": 10,
+                      "end": 57
+                    },
+                    {
+                      "name": "PR00404",
+                      "description": "MADSDOMAIN",
+                      "db": "PRINTS",
+                      "interpro": "IPR002100",
+                      "start": 3,
+                      "end": 23
+                    },
+                    {
+                      "name": "PR00404",
+                      "description": "MADSDOMAIN",
+                      "db": "PRINTS",
+                      "interpro": "IPR002100",
+                      "start": 23,
+                      "end": 38
+                    },
+                    {
+                      "name": "PR00404",
+                      "description": "MADSDOMAIN",
+                      "db": "PRINTS",
+                      "interpro": "IPR002100",
+                      "start": 38,
+                      "end": 59
+                    },
+                    {
+                      "name": "PS00350",
+                      "description": "MADS_BOX_1",
+                      "db": "Prosite_patterns",
+                      "interpro": "IPR002100",
+                      "start": 3,
+                      "end": 57
+                    },
+                    {
+                      "name": "PS50066",
+                      "description": "MADS_BOX_2",
+                      "db": "Prosite_profiles",
+                      "interpro": "IPR002100",
+                      "start": 1,
+                      "end": 61
+                    },
+                    {
+                      "name": "SM00432",
+                      "description": "madsneu2",
+                      "db": "Smart",
+                      "interpro": "IPR002100",
+                      "start": 1,
+                      "end": 60
+                    },
+                    {
+                      "name": "PF01486",
+                      "description": "K-box",
+                      "db": "Pfam",
+                      "interpro": "IPR002487",
+                      "start": 84,
+                      "end": 170
+                    },
+                    {
+                      "name": "PS51297",
+                      "description": "K_BOX",
+                      "db": "Prosite_profiles",
+                      "interpro": "IPR002487",
+                      "start": 85,
+                      "end": 175
+                    },
+                    {
+                      "name": "cd00265",
+                      "description": "MADS_MEF2_like",
+                      "db": "CDD",
+                      "interpro": "IPR033896",
+                      "start": 2,
+                      "end": 79
+                    }
+                  ],
+                  "architecture": [
+                    {
+                      "root": "2100",
+                      "start": 1,
+                      "end": 79,
+                      "interpro": "IPR002100",
+                      "name": "TF_MADSbox",
+                      "description": "Transcription factor, MADS-box"
+                    },
+                    {
+                      "root": "2487",
+                      "start": 84,
+                      "end": 175,
+                      "interpro": "IPR002487",
+                      "name": "TF_Kbox",
+                      "description": "Transcription factor, K-box"
+                    }
+                  ],
+                  "roots": "2100 2487"
+                },
+                "homologous_superfamily": {
+                  "entries": [
+                    {
+                      "name": "3.40.1810.10",
+                      "description": null,
+                      "db": "Gene3D",
+                      "interpro": "IPR036879",
+                      "start": 13,
+                      "end": 86
+                    },
+                    {
+                      "name": "SSF55455",
+                      "description": "SRF-like",
+                      "db": "SuperFamily",
+                      "interpro": "IPR036879",
+                      "start": 2,
+                      "end": 91
+                    }
+                  ]
+                },
+                "family": {
+                  "entries": [
+                    {
+                      "name": "PTHR48019",
+                      "description": "SERUM RESPONSE FACTOR HOMOLOG",
+                      "db": "PANTHER",
+                      "interpro": "IPR050142",
+                      "start": 3,
+                      "end": 191
+                    }
+                  ]
+                }
+              }
+            },
+            "id": "Os03t0215400-01"
+          }
+        ],
+        "canonical_transcript": "Os03t0215400-01"
+      }
+    }
+  ]
+}

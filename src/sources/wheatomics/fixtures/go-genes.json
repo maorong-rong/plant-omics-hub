@@ -1,0 +1,24 @@
+{
+  "capture": {
+    "url": "https://wheatomics.sdau.edu.cn/api/go/genes?go_id=GO:0010022&genes=TraesCS2A02G261200.1,TraesCS2D02G262700.1,TraesCS6B02G286400.1,TraesCS6A02G259000.1",
+    "at": "2026-11-10T14:11:52.255977Z",
+    "capturedAt": "2026-11-10T14:11:52.256002Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 124,
+    "sourceSha256": "E0DBA5C3BAE6A04276AA3743FE3A2BE667C97118A85B8247B98C25615FD9B39A",
+    "rawBodySource": "re-collected",
+    "simulated": false,
+    "note": "真实抓取 2026-11-10；GO:0010022 命中 4 个送检基因（gene→GO 明细来源）"
+  },
+  "rawBody": "{\"go_id\":\"GO:0010022\",\"genes\":[\"TraesCS2A02G261200.1\",\"TraesCS2D02G262700.1\",\"TraesCS6A02G259000.1\",\"TraesCS6B02G286400.1\"]}",
+  "payload": {
+    "go_id": "GO:0010022",
+    "genes": [
+      "TraesCS2A02G261200.1",
+      "TraesCS2D02G262700.1",
+      "TraesCS6A02G259000.1",
+      "TraesCS6B02G286400.1"
+    ]
+  }
+}

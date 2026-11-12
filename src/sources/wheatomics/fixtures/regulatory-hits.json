@@ -1,0 +1,65 @@
+{
+  "capture": {
+    "url": "https://wheatomics.sdau.edu.cn/api/regulatory/gene/TraesCS1A02G013100/hits?page_size=3",
+    "at": "2026-11-10T14:11:52.133642Z",
+    "capturedAt": "2026-11-10T14:11:52.133675Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 807,
+    "sourceSha256": "F0CC92D150DBBF79E5F82E6E0EACDD52BF53D6DDC0830196178F4C74B9EC7174",
+    "rawBodySource": "re-collected",
+    "simulated": false,
+    "note": "真实抓取 2026-11-10；motif→target 明细（hit_id/motif_id/motif_name/motif_source/坐标/p 值/匹配序列）；page_size=3 为裁剪请求"
+  },
+  "rawBody": "{\"gene_id\":\"TraesCS1A02G013100\",\"total\":798,\"page\":1,\"page_size\":3,\"items\":[{\"hit_id\":4467446,\"motif_id\":\"MA2344.1\",\"motif_name\":\"REV\",\"motif_source\":\"JASPAR2026_CORE_Plants\",\"chrom\":\"chr1A\",\"start0\":7309709,\"end0\":7309723,\"strand\":\"+\",\"score\":10.0139,\"pvalue\":8.51e-05,\"qvalue\":null,\"matched_sequence\":\"CAGAATTATTATTT\"},{\"hit_id\":103199,\"motif_id\":\"MA0951.1\",\"motif_name\":\"ATHB-16\",\"motif_source\":\"JASPAR2026_CORE_Plants\",\"chrom\":\"chr1A\",\"start0\":7309712,\"end0\":7309720,\"strand\":\"-\",\"score\":13.3016,\"pvalue\":3.23e-05,\"qvalue\":null,\"matched_sequence\":\"TAATAATT\"},{\"hit_id\":3508417,\"motif_id\":\"MA1209.2\",\"motif_name\":\"ATHB-20\",\"motif_source\":\"JASPAR2026_CORE_Plants\",\"chrom\":\"chr1A\",\"start0\":7309712,\"end0\":7309720,\"strand\":\"-\",\"score\":13.3472,\"pvalue\":5.88e-05,\"qvalue\":null,\"matched_sequence\":\"TAATAATT\"}]}",
+  "payload": {
+    "gene_id": "TraesCS1A02G013100",
+    "total": 798,
+    "page": 1,
+    "page_size": 3,
+    "items": [
+      {
+        "hit_id": 4467446,
+        "motif_id": "MA2344.1",
+        "motif_name": "REV",
+        "motif_source": "JASPAR2026_CORE_Plants",
+        "chrom": "chr1A",
+        "start0": 7309709,
+        "end0": 7309723,
+        "strand": "+",
+        "score": 10.0139,
+        "pvalue": 8.51e-05,
+        "qvalue": null,
+        "matched_sequence": "CAGAATTATTATTT"
+      },
+      {
+        "hit_id": 103199,
+        "motif_id": "MA0951.1",
+        "motif_name": "ATHB-16",
+        "motif_source": "JASPAR2026_CORE_Plants",
+        "chrom": "chr1A",
+        "start0": 7309712,
+        "end0": 7309720,
+        "strand": "-",
+        "score": 13.3016,
+        "pvalue": 3.23e-05,
+        "qvalue": null,
+        "matched_sequence": "TAATAATT"
+      },
+      {
+        "hit_id": 3508417,
+        "motif_id": "MA1209.2",
+        "motif_name": "ATHB-20",
+        "motif_source": "JASPAR2026_CORE_Plants",
+        "chrom": "chr1A",
+        "start0": 7309712,
+        "end0": 7309720,
+        "strand": "-",
+        "score": 13.3472,
+        "pvalue": 5.88e-05,
+        "qvalue": null,
+        "matched_sequence": "TAATAATT"
+      }
+    ]
+  }
+}

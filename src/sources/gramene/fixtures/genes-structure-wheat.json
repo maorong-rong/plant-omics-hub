@@ -1,0 +1,141 @@
+{
+  "capture": {
+    "url": "https://data.gramene.org/v69/genes?idList=TraesCS1A03G0032400&idList=TraesCS1A03G0032400",
+    "at": "2026-11-10T06:11:06.000Z",
+    "status": 200,
+    "originalBytes": 2603,
+    "contentType": "application/json; charset=utf-8",
+    "trimmed": "小麦 TraesCS1A03G0032400：gene_structure.exons 1 条（1–570，570 bp）+ translation.features.domain 6 条（PF00319 21–68 等）。裁剪：只保留 _id/name/description/biotype/taxon_id/system_name/db_type/location/gene_structure",
+    "note": "小麦 1 外显子 + 功能域坐标"
+  },
+  "payload": [
+    {
+      "_id": "TraesCS1A03G0032400",
+      "name": "TraesCS1A03G0032400",
+      "description": null,
+      "biotype": "protein_coding",
+      "taxon_id": 4565015,
+      "system_name": "triticum_aestivum_refseqv2",
+      "db_type": "core",
+      "location": {
+        "region": "1A",
+        "start": 8652783,
+        "end": 8653352,
+        "strand": 1,
+        "map": "GCA_018294505.1"
+      },
+      "gene_structure": {
+        "exons": [
+          {
+            "id": "TraesCS1A03G0032400.1-E1",
+            "start": 1,
+            "end": 570
+          }
+        ],
+        "transcripts": [
+          {
+            "exons": [
+              "TraesCS1A03G0032400.1-E1"
+            ],
+            "length": 570,
+            "cds": {
+              "start": 1,
+              "end": 570
+            },
+            "translation": {
+              "id": "TraesCS1A03G0032400.1.CDS1",
+              "length": 189,
+              "features": {
+                "domain": {
+                  "entries": [
+                    {
+                      "name": "PF00319",
+                      "description": "SRF-TF",
+                      "db": "Pfam",
+                      "interpro": "IPR002100",
+                      "start": 21,
+                      "end": 68
+                    },
+                    {
+                      "name": "PR00404",
+                      "description": "MADSDOMAIN",
+                      "db": "PRINTS",
+                      "interpro": "IPR002100",
+                      "start": 48,
+                      "end": 69
+                    },
+                    {
+                      "name": "PR00404",
+                      "description": "MADSDOMAIN",
+                      "db": "PRINTS",
+                      "interpro": "IPR002100",
+                      "start": 33,
+                      "end": 48
+                    },
+                    {
+                      "name": "PR00404",
+                      "description": "MADSDOMAIN",
+                      "db": "PRINTS",
+                      "interpro": "IPR002100",
+                      "start": 13,
+                      "end": 33
+                    },
+                    {
+                      "name": "PS50066",
+                      "description": "MADS_BOX_2",
+                      "db": "Prosite_profiles",
+                      "interpro": "IPR002100",
+                      "start": 11,
+                      "end": 71
+                    },
+                    {
+                      "name": "SM00432",
+                      "description": "madsneu2",
+                      "db": "Smart",
+                      "interpro": "IPR002100",
+                      "start": 10,
+                      "end": 72
+                    }
+                  ],
+                  "architecture": [
+                    {
+                      "root": "2100",
+                      "start": 10,
+                      "end": 72,
+                      "interpro": "IPR002100",
+                      "name": "TF_MADSbox",
+                      "description": "Transcription factor, MADS-box"
+                    }
+                  ],
+                  "roots": "2100"
+                },
+                "homologous_superfamily": {
+                  "entries": [
+                    {
+                      "name": "3.40.1810.10",
+                      "description": null,
+                      "db": "Gene3D",
+                      "interpro": "IPR036879",
+                      "start": 24,
+                      "end": 95
+                    },
+                    {
+                      "name": "SSF55455",
+                      "description": "SRF-like",
+                      "db": "SuperFamily",
+                      "interpro": "IPR036879",
+                      "start": 14,
+                      "end": 85
+                    }
+                  ]
+                }
+              }
+            },
+            "id": "TraesCS1A03G0032400.1"
+          }
+        ],
+        "canonical_transcript": "TraesCS1A03G0032400.1"
+      }
+    }
+  ]
+}

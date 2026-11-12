@@ -1,0 +1,604 @@
+#!/usr/bin/env node
+/**
+ * 检索层自测（AGENTS.md v2.2 §10.2 三条验收标准）。
+ *
+ * 为什么合成一个入口：此前是 `%TEMP%` 下六个散件（selftest/mcp-list/mcp-call/probe-range/
+ * combine/selftest-v22），既不能当长期证据，也无法复现"用的是哪一版脚本"。
+ * 现在一入口三模式，题集在 `scripts/retrieval-cases.json`：
+ *
+ *   node scripts/retrieval-selftest.mjs                  # judge（默认）：跑全部题，逐题七项检查
+ *   node scripts/retrieval-selftest.mjs --list-tools     # 打印真实 MCP 出口的 tools/list
+ *   node scripts/retrieval-selftest.mjs --call "问题"     # 经真实 MCP stdio 调 hub_find_sources
+ *
+ * **零上游边界**：本脚本只走本地目录与本地 MCP 子进程，不发任何上游请求（judge 里注入的
+ * `http` 一被调用就抛错，作为"检索层不该联网"的硬断言）。上游是否可达由 `npm run probe`
+ * 单独回答——两件事的红必须能一眼分开（AGENTS §四）。
+ *
+ * 判据（v2.2）：
+ *   ① 返回**全部命中源**的候选 + 各自工具名；命中 = 物种覆盖 ∧ 意图能力，双命中；
+ *      不为凑数量把只满足单条件的源降级计入；正文装不下时正文必须明说"另有 N 个命中源未展示"。
+ *   ② 命中不足（含 0 个）如实说"没有覆盖"，不拿不相干的源凑数；物种在目录时必须区分
+ *      "有源覆盖但能力缺口"与"物种没人接"。
+ *   ③ 返回的工具名必须在真实 MCP 出口的 tools/list 里，且带非空 parameters。
+ *
+ * 退出码：任一检查 FAIL → 1（断言铁律：不许只告警）。
+ */
+import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(HERE, '..');
+
+const argOf = (name, fallback = undefined) => {
+  const i = process.argv.indexOf(name);
+  return i >= 0 && process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[i + 1] : fallback;
+};
+
+const repoRoot = resolve(argOf('--repo', REPO_ROOT));
+// 默认写系统临时目录：这是本机复算产物，不是交付物（同 probe-report.json 的口径）。
+// 要当长期证据时显式 `--out <仓内或记录目录路径>`，由调用方决定入库位置。
+const outPath = resolve(argOf('--out', join(tmpdir(), 'retrieval-selftest-report.json')));
+const casesPath = resolve(argOf('--cases', join(repoRoot, 'scripts', 'retrieval-cases.json')));
+
+/* ─────────────── 真实 MCP stdio 出口（③ 的协议层核对） ─────────────── */
+
+/**
+ * 起一个本地 MCP 子进程，按需发一条请求。
+ *
+ * 只在本机 spawn `dist/mcp/cli.js`，**不联网**：hub_find_sources 与 tools/list 都不发上游请求。
+ * `stdio: 'pipe'` 在这里是必需的（要读 JSON-RPC 回包）；它只连本机子进程，不是上游连接。
+ */
+async function mcpRequest(method, params) {
+  const child = spawn(process.execPath, [join(repoRoot, 'dist', 'mcp', 'cli.js')], {
+    cwd: repoRoot,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const replies = [];
+  let buf = '';
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => {
+    buf += chunk;
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (!line) continue;
+      try {
+        replies.push(JSON.parse(line));
+      } catch {
+        replies.push({ __unparsed: line });
+      }
+    }
+  });
+  let stderr = '';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (c) => { stderr += c; });
+
+  const send = (obj) => child.stdin.write(`${JSON.stringify(obj)}\n`);
+  send({
+    jsonrpc: '2.0', id: 1, method: 'initialize',
+    params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'retrieval-selftest', version: '2.2' } },
+  });
+  send({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} });
+  send({ jsonrpc: '2.0', id: 2, method, params });
+
+  const waitFor = (id, ms = 20_000) => new Promise((res) => {
+    const t0 = Date.now();
+    const tick = setInterval(() => {
+      const hit = replies.find((r) => r.id === id);
+      if (hit || Date.now() - t0 > ms) {
+        clearInterval(tick);
+        res(hit ?? null);
+      }
+    }, 50);
+  });
+
+  const init = await waitFor(1);
+  const reply = await waitFor(2);
+  child.stdin.end();
+  await new Promise((r) => setTimeout(r, 150));
+  child.kill();
+  return { init, reply, stderr };
+}
+
+async function listMcpTools() {
+  const { init, reply, stderr } = await mcpRequest('tools/list', {});
+  const tools = (reply?.result?.tools ?? []).map((t) => t.name);
+  if (tools.length === 0) {
+    throw new Error(`MCP 出口没有返回工具（stderr 尾部：${stderr.slice(-300)}）`);
+  }
+  return { tools, serverInfo: init?.result?.serverInfo ?? null, protocolVersion: init?.result?.protocolVersion ?? null };
+}
+
+/* ─────────────── 模式：--list-tools ─────────────── */
+
+async function modeListTools() {
+  const { tools, serverInfo, protocolVersion } = await listMcpTools();
+  console.log(`MCP 出口 tools/list = ${tools.length} 个｜server=${JSON.stringify(serverInfo)}｜protocol=${protocolVersion}`);
+  console.log(tools.join('\n'));
+  return 0;
+}
+
+/* ─────────────── 模式：--call ─────────────── */
+
+async function modeCall(question) {
+  const { reply, stderr } = await mcpRequest('tools/call', { name: 'hub_find_sources', arguments: { question } });
+  const content = reply?.result?.content ?? [];
+  const text = content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+  console.log(`isError=${reply?.result?.isError ?? 'null'}｜text ${Buffer.byteLength(text, 'utf8')} B｜content=${content.map((c) => c.type).join(',')}`);
+  console.log(text);
+  writeFileSync(outPath, JSON.stringify({
+    ranAt: new Date().toISOString(), question, isError: reply?.result?.isError ?? null,
+    contentTypes: content.map((c) => c.type), textBytes: Buffer.byteLength(text, 'utf8'), text,
+    stderrTail: stderr.slice(-300),
+  }, null, 2), 'utf8');
+  console.log(`\nsaved ${outPath}`);
+  return reply ? 0 : 1;
+}
+
+/* ─────────────── 模式：judge（默认） ─────────────── */
+
+async function modeJudge() {
+  const cases = JSON.parse(readFileSync(casesPath, 'utf8'));
+  const mod = await import(pathToFileURL(join(repoRoot, 'dist', 'sources', 'index.js')).href);
+  const cat = await import(pathToFileURL(join(repoRoot, 'dist', 'retrieval', 'capability-catalog.js')).href);
+  const registry = mod.createRegistry();
+  const findTool = registry.listMetaTools().find((t) => t.name === 'hub_find_sources');
+  if (!findTool) throw new Error('注册表里没有 hub_find_sources');
+
+  const { tools: mcpTools } = await listMcpTools();
+  const mcpSet = new Set(mcpTools);
+  const allNames = new Set(registry.listTools().map((t) => t.name));
+
+  const CAPS = cat.TOOL_CAPABILITIES;
+  const SEM = cat.SOURCE_SEMANTICS;
+  const satisfies = cat.speciesSatisfies;
+  const known = cat.speciesKnownInCatalog ?? ((sp) => CAPS.some((c) => (c.speciesScope.query ?? [])
+    .some((sc) => sc !== '不限物种（按精确 ID）' && satisfies(sp, sc))));
+
+  // 零上游硬断言：检索层一旦发请求就抛错，题集里不该出现任何上游流量。
+  let upstreamAttempts = 0;
+  const ctx = {
+    http: async () => {
+      upstreamAttempts += 1;
+      throw new Error('hub_find_sources 不应发上游请求（零上游边界）');
+    },
+  };
+
+  /** 独立的双命中判定：不调用被测实现，只读能力目录。 */
+  const doubleHit = (toolName, recognized) => {
+    const cap = CAPS.find((c) => c.tool === toolName);
+    if (!cap) return { ok: false, why: 'not-in-catalog' };
+    if (!cap.intents.some((id) => recognized.intents.includes(id))) return { ok: false, why: 'intent-miss' };
+    const species = recognized.species;
+    if (species.length === 0) return { ok: true, why: 'no-species' };
+    const sem = SEM[cap.sourceId];
+    const scope = cap.speciesScope.query ?? [];
+    if (species.some((sp) => scope.some((sc) => satisfies(sp, sc)))) return { ok: true, why: 'species-hit' };
+    if (sem?.policy === 'any-by-id') return { ok: true, why: 'any-by-id' };
+    if (sem?.policy === 'example-only') {
+      return species.some((sp) => (sem.example ?? []).includes(sp))
+        ? { ok: true, why: 'example-hit' }
+        : { ok: false, why: 'example-miss' };
+    }
+    return { ok: false, why: 'species-miss' };
+  };
+
+  const rows = [];
+  for (const c of cases.cases ?? cases) {
+    // 题集可带 `hint`：用于物种提示 A/B 两档（「给了但词表里没有」≠「没给」）
+    const res = await findTool.run(c.hint ? { question: c.q, species_hint: c.hint } : { question: c.q }, ctx);
+    const text = res.text ?? '';
+    const raw = res.raw ?? {};
+    const recognized = raw.recognized ?? { species: [], intents: [], sources: [], clauses: [] };
+    const candidates = (raw.candidates ?? []).map((g) => ({ sourceId: g.sourceId, tools: g.tools ?? [] }));
+    const returnedTools = candidates.flatMap((g) => g.tools);
+
+    // ③ 可调用性
+    const notInMcp = returnedTools.filter((n) => !mcpSet.has(n));
+    const noSchema = returnedTools.filter((n) => {
+      const t = registry.getTool(n);
+      return !t || !t.parameters || typeof t.parameters !== 'object';
+    });
+
+    // ①-a 双命中
+    const doubleHitMiss = returnedTools
+      .map((name) => ({ tool: name, ...doubleHit(name, recognized) }))
+      .filter((v) => !v.ok);
+    const eachSourceHasTool = candidates.every((g) => g.tools.length > 0);
+
+    // ①-b 完整命中集（只在"无点名源、无未覆盖物种、无分句"时判，避免拿猜的口径去判）
+    //
+    // v2.2 的①是「返回**全部命中源**」——判的是**源**，不是"每个双命中工具都出现"。
+    // 单源内部选哪些工具属工具设计层面（一源多意图时不必全上），拿工具全集去判会把
+    // 正常裁剪误判成漏源（2026-10-30 自测 L1/L2 就踩过这个坑）。
+    const unknownSpecies = recognized.species.filter((sp) => !known(sp));
+    // 多物种题也不判：方向门与目标端门没建模，「小麦同源基因对应玉米」这种题
+    // 按目录重算会把 wheatomics 算成"该给却没给"（缺源 wheatomics），而实现拒绝它是对的
+    // （该工具 target 只有水稻/拟南芥）。多物种的方向/target 由题集里两条单向断言覆盖。
+    // **物种为空时也不判**：那时"按目录重算"会退化成"该意图下所有源都算命中"，
+    // 而实现是按规格拒答（物种未知判不了覆盖）——拿这个重算去判，等于用被废止的口径判实现。
+    const guardOk = recognized.sources.length === 0 && unknownSpecies.length === 0
+      && (recognized.clauses ?? []).length === 0 && recognized.species.length === 1;
+    const expectedSources = guardOk
+      ? [...new Set(CAPS.filter((cap) => doubleHit(cap.tool, recognized).ok).map((cap) => cap.sourceId))]
+      : null;
+    const returnedSources = new Set(candidates.map((g) => g.sourceId));
+    const missing = expectedSources ? expectedSources.filter((s) => !returnedSources.has(s)) : null;
+    // 参考信息：命中源齐全、但某源的双命中工具没出现（不算 FAIL，随报告一起给出便于审查）
+    const expectedToolsAll = guardOk
+      ? CAPS.filter((cap) => doubleHit(cap.tool, recognized).ok).map((cap) => cap.tool)
+      : null;
+    const toolsNotOffered = expectedToolsAll ? expectedToolsAll.filter((n) => !returnedTools.includes(n)) : null;
+
+    // ② 如实说没有覆盖 / 区分两种缺口
+    const zero = candidates.length === 0;
+    // 仅物种命中：物种识别成功、意图为空。这类必须直接拒答（state=B、候选 0），
+    // 否则"物种接得住"会被误读成"能力也接得住"，模型会照着候选去调不该调的源。
+    const speciesOnly = recognized.species.length > 0 && (recognized.intents ?? []).length === 0;
+    /**
+     * 题级硬排除（分析/计算）与"没覆盖"是**两件不同的事**，文案判据也必须分开：
+     * 前者要写「本服务不支持该任务／不是没有覆盖」，后者要写「没有覆盖／不在本服务目录」。
+     * 混用会让"本服务不做"被读成"本服务没接"，反之亦然。
+     */
+    const isComputation = typeof raw.computation === 'string';
+    const saysNoCover = isComputation
+      ? /不是没有覆盖|不支持该任务/.test(text)
+      : /没有覆盖|未覆盖|不在本服务目录/.test(text);
+    const contradiction = zero && /没能识别出可用意图/.test(text) && recognized.sources.length > 0;
+    const coverageBothKinds = isComputation
+      ? true // 题级硬排除不做覆盖判定，不适用"物种没人接"这条
+      : (!zero || recognized.species.length === 0 || unknownSpecies.length > 0
+        || /有源覆盖|能力缺口|点名了/.test(text));
+
+    // ①-c 预算截断时正文必须明说"另有 N 个命中源未展示"
+    const renderedCount = new Set([...text.matchAll(/^([\u2460-\u2473]) ([a-z0-9]+)｜/gmu)].map((m) => m[2])).size;
+    const omittedNote = /另有 (\d+) 个命中源未展示/.test(text);
+    const omittedCount = Number((text.match(/另有 (\d+) 个命中源未展示/) ?? [])[1] ?? 0);
+    const dropConsistent = renderedCount === candidates.length
+      || (omittedNote && omittedCount === candidates.length - renderedCount);
+
+    /**
+     * 逐物种交代（2026-10-31 负责人口径）：**识别到的物种集合 ⊆ 已交代物种集合**，差一个即 FAIL。
+     *
+     * 交代 = `raw.speciesVerdicts` 里该物种有一条判定（结构化，不靠解析正文猜）；
+     * 缺口态还必须在正文有一行同时点名该物种、并说明缺口,否则就是"物种凭空消失"——
+     * 旧实现正是这样丢掉「小麦、玉米的表达与变异都要」里的玉米。
+     * `out-of-scope` 是题级拒答（分析/计算），不假装做过覆盖判定，因此不要求正文交代。
+     */
+    const verdicts = Array.isArray(raw.speciesVerdicts) ? raw.speciesVerdicts : null;
+    const verdictSpecies = new Set((verdicts ?? []).map((v) => v.species));
+    const unaccounted = recognized.species.filter((sp) => !verdictSpecies.has(sp));
+    const gapVerdicts = (verdicts ?? []).filter((v) => v.status !== 'candidate' && v.status !== 'out-of-scope');
+    const textLines = text.split('\n');
+    /**
+     * 判 M-1 时只看**正文**：首行「识别：物种=…」本来就会把所有物种列一遍（旧实现正是靠它
+     * 看起来"交代过"），尾注还会原样回显 question——两者都不算交代，必须排除。
+     */
+    const bodyLines = textLines.filter((line) => !/^识别：/.test(line) && !/^源：/.test(line) && !/^目录快照：/.test(line));
+    const undocumented = gapVerdicts.filter((v) => !bodyLines.some(
+      (line) => line.includes(v.species) && /不在|没有|未覆盖|不覆盖|缺/.test(line)));
+    const speciesAccounting = recognized.species.length === 0
+      ? 'n/a'
+      : verdicts === null ? 'FAIL 缺 raw.speciesVerdicts'
+        : unaccounted.length > 0 ? `FAIL 缺交代 ${unaccounted.join('、')}`
+          : undocumented.length > 0 ? `FAIL 正文未交代 ${undocumented.map((v) => `${v.species}(${v.status})`).join('、')}`
+            : 'PASS';
+
+    /**
+     * 两个方向的防作弊。
+     *
+     * M-2 **不得自相矛盾/不得整题拒答假修复**：
+     *     (a) 有候选却判 state=B 是自相矛盾；
+     *     (b) 已有物种拿到双命中候选却把整题拒成 0 候选，等于没修。
+     * M-3 **不得凑数**：识别到的物种**按目录**全部没有源覆盖时，必须 state=B 且候选 0。
+     *
+     * M-3 的判据**不能读 `raw.speciesVerdicts`**——那是被测实现自己的说法。漏候选时它会把物种
+     * 标成 `candidate`（gwh「不限物种（按精确 ID）」一放行就会这样），于是"全部无覆盖"这个前提
+     * 自己就不成立了，判据永远绿。所以 M-3 直接用能力目录独立重算 `known()`（本轮负控实测：
+     * 抽掉 veto 后 N1「大豆的基因组组装」漏出 gwh，靠 verdicts 的旧写法判不出来，改目录判据后报红）。
+     *
+     * M-4（每个候选工具至少对一个识别物种双命中）与 ①-a 是同一条判据、同一个谓词
+     * （`doubleHit()` 里就是 `recognized.species.some(...)`），不再复制一份——
+     * 同一个事实只留一处判据，改口径时才不会两边不同步。
+     */
+    const candidateVerdicts = (verdicts ?? []).filter((v) => v.status === 'candidate');
+    const allUnknownToCatalog = recognized.species.length > 0 && recognized.species.every((sp) => !known(sp));
+    const m2 = (candidates.length > 0 && raw.state === 'B')
+      ? `FAIL state=B 却有 ${candidates.length} 个候选（自相矛盾）`
+      : (candidateVerdicts.length === 0
+        ? 'n/a'
+        : (raw.state === 'ok' && candidates.length > 0
+          ? 'PASS'
+          : `FAIL state=${raw.state ?? '(缺)'} 候选=${candidates.length}（有物种已命中却整题拒答）`));
+    const m3 = recognized.species.length === 0
+      ? 'n/a'
+      : (allUnknownToCatalog
+        ? (raw.state === 'B' && candidates.length === 0 ? 'PASS' : `FAIL state=${raw.state ?? '(缺)'} 候选=${candidates.length}（全部物种无覆盖却给了候选）`)
+        : 'n/a');
+
+    /**
+     * 题级期望（`expect`）：意图识别、必须给出/不得给出的工具。
+     *
+     * `intents` 钉的是"意图兜底不误伤"——`基因` 兜底只在整句零意图时触发，
+     * 「水稻的同源基因」必须恰好是 `['homolog']`，不能因为含"基因"多出 gene-search。
+     * `tools`/`notTools` 是**两条单向断言**：方向门/目标端门不建完整重算模型
+     * （2026-10-30 已知：完整重算在多物种题上会把正常裁剪判成漏源），
+     * 只钉"该给的一定给、不该给的一定不给"这一对反例。
+     */
+    const expect = c.expect ?? {};
+    /**
+     * 题级硬排除（分析/计算类）：必须**在意图识别之前**拦，且 `intents` 必须为空。
+     *
+     * 反例（真实语料，2026-11-01）：「帮我设计 PCR 引物」里含"引物"，
+     * 旧实现给出 `intents=[reference-gene]`（内参基因），映射层据此会把用户导向内参源。
+     * 所以这一条不只判"有没有拒答"，还要判 `recognized.intents` 是否为空——
+     * 文案对不对是第二步，意图有没有漏出去是第一步。
+     * `hardExclude: false` 是**正控**：合法查询（「小麦的引物有哪些」）不得被误判成计算任务。
+     */
+    const hardExclude = expect.hardExclude ?? null;
+    const hardExcludeCheck = hardExclude === null
+      ? 'n/a'
+      : hardExclude
+        ? (raw.state === 'B' && candidates.length === 0 && returnedTools.length === 0 && typeof raw.computation === 'string'
+          && !/没有任何源覆盖|不在本服务目录/.test(text)
+          ? 'PASS'
+          : `FAIL state=${raw.state} 候选=${candidates.length} 工具=${returnedTools.length} computation=${raw.computation ?? '(缺)'}`
+            + `；误写成"没接"=${/没有任何源覆盖|不在本服务目录/.test(text)}`)
+        : (raw.computation === undefined && recognized.intents.length > 0
+          ? 'PASS'
+          : `FAIL 合法查询被误判成硬排除（computation=${raw.computation ?? '(无)'} intents=[${recognized.intents.join(',')}]）`);
+    /**
+     * 「本服务不做」与「本服务没接」必须**各有一条用例**：
+     * 只测一边等于没测——两条分支的文案一旦互换，读者会把"我们不做分析"读成"我们没接这个物种"。
+     *
+     * `uncovered:true` 侧要求：零候选 + 明确"没有任何源覆盖/不在本服务目录"，**且不得出现"不支持该任务"**；
+     * `hardExclude:true` 侧（上面那条）反过来：必须写"不支持该任务/不是没有覆盖"，不得写成"没接"。
+     */
+    const uncoveredExpect = expect.uncovered ?? null;
+    const uncoveredCheck = uncoveredExpect === null
+      ? 'n/a'
+      : (raw.state === 'B' && candidates.length === 0
+        && /没有任何源覆盖|不在本服务目录/.test(text)
+        && !/不支持该任务/.test(text)
+        ? 'PASS'
+        : `FAIL state=${raw.state} 候选=${candidates.length}`
+          + `；缺"没接"表述=${!/没有任何源覆盖|不在本服务目录/.test(text)}`
+          + `；混入"不做"表述=${/不支持该任务/.test(text)}`);
+    const expectIntents = expect.intents ?? null;
+    const sameSet = (want, got) => want.length === got.length && want.every((x) => got.includes(x));
+    const intentMismatch = expectIntents === null
+      ? null
+      : (sameSet(expectIntents, recognized.intents) ? null : `期望 [${expectIntents.join(',')}] 实为 [${recognized.intents.join(',')}]`);
+    const missingTool = (expect.tools ?? []).filter((n) => !returnedTools.includes(n));
+    const forbiddenTool = (expect.notTools ?? []).filter((n) => returnedTools.includes(n));
+
+    /**
+     * 物种提示分档（2026-11-01，转来的真实缺陷）：**给了但词表里没有 ≠ 没给**。
+     *
+     * 旧实现把两档并成一档，用户给了 `species_hint="棉花"` 却被告知"请补充 species_hint"。
+     * 判据三件事：`raw.speciesGap` 分档正确；B 档**必须回显用户原文**；
+     * B 档**不得再让用户补 species_hint**，且必须写"未覆盖／不是该数据不存在"。
+     */
+    const expectGap = expect.speciesGap ?? null;
+    const actualGap = raw.speciesGap ?? 'none';
+    const asksForHint = /请补充物种|请补充：物种|补充 species_hint/.test(text);
+    const speciesGapCheck = expectGap === null
+      ? 'n/a'
+      : actualGap !== expectGap
+        ? `FAIL 期望分档 ${expectGap}，实为 ${actualGap}`
+        : expectGap === 'hint-unrecognized'
+          ? (!text.includes(c.hint ?? '')
+            ? 'FAIL B 档没回显用户给的 species_hint'
+            : asksForHint
+              ? 'FAIL B 档又让用户补 species_hint（他已经给了）'
+              : !/未覆盖/.test(text) || !/不是「该数据不存在」/.test(text)
+                ? 'FAIL B 档没写"未覆盖／不是数据不存在"'
+                : 'PASS')
+          : 'PASS';
+
+    /**
+     * 物种提示分档的三条验收。
+     *
+     * 上面那条只验四件事（分档、回显、不再要 hint、写了未覆盖），B 档今天新增的
+     * 「已接物种范围」与「拼写提示」两行**一条都没被验**——那只能靠人眼看，不算判据。
+     */
+    // 第 1 条：已接物种范围必须存在，且行内每个标签都要能在**当前注册表启用的工具**里找到来源；
+    //     也不许出现用户给的那个未覆盖写法（否则等于把"未覆盖的物种"写进"已接范围"）。
+    //     残留风险如实记：写死一份拷贝今天照样过，只有注册表变了才红；"现算"由一次性负控演练
+    //     （临时删掉某源的物种声明，该行必须少一项）证明，不进例行断言。
+    const enabledToolNames = new Set(registry.listTools().map((t) => t.name));
+    const enabledScopes = [...new Set(CAPS
+      .filter((cap) => enabledToolNames.has(cap.tool))
+      .flatMap((cap) => cap.speciesScope.query ?? [])
+      .filter((scope) => scope !== '不限物种（按精确 ID）'))];
+    const scopeLine = text.split('\n').find((line) => line.includes('已接物种范围')) ?? '';
+    const scopeLabels = scopeLine === '' ? [] : scopeLine
+      .slice(scopeLine.indexOf('：') + 1)
+      .split('、').map((label) => label.trim()).filter(Boolean);
+    const badScopeLabels = scopeLabels.filter((label) => !enabledScopes.includes(label));
+    const n1 = expectGap !== 'hint-unrecognized'
+      ? 'n/a'
+      : scopeLine === ''
+        ? 'FAIL 缺「已接物种范围」行'
+        : badScopeLabels.length > 0
+          ? `FAIL 含非注册表现算标签 ${badScopeLabels.join('、')}`
+          : 'PASS';
+
+    // N2：拼写提示只准出现在 B 档，且必须指向**已接物种**；同时 B 档文案里**不得**出现
+    //     「未识别出物种」——字段说未覆盖、嘴上说没识别，就是这类缺陷的原形。
+    const tipLine = text.split('\n').find((line) => line.includes('疑似拼写')) ?? '';
+    const tipSpecies = /最接近的已接写法是「([^」]+)」/.exec(tipLine)?.[1];
+    const claimsNotRecognized = /未识别出物种/.test(text);
+    const n2 = expectGap === 'hint-unrecognized'
+      ? (claimsNotRecognized
+        ? 'FAIL B 档文案出现「未识别出物种」（与"未覆盖"自相矛盾）'
+        : tipLine === ''
+          ? '不判（本题 hint 无近似别名，允许无拼写提示）'
+          : tipSpecies === undefined
+            ? 'FAIL 拼写提示没给出「最接近的已接写法」'
+            : !known(tipSpecies)
+              ? `FAIL 提示的「${tipSpecies}」不是已接物种`
+              : 'PASS')
+      : (tipLine === '' ? 'PASS' : 'FAIL 非 B 档出现拼写提示');
+
+    // N3：A 档必须**仍给出**"请补充物种"的指引——只断言 B 档"不得让补"，
+    //     把 A 档指引一起删掉同样能过，那验的是"不要误导"，不是"什么都别说"。
+    const n3 = expectGap === 'not-given'
+      ? (asksForHint ? 'PASS' : 'FAIL A 档丢了「请补充物种（species_hint）」指引')
+      : 'n/a';
+
+    const checks = {
+      '①-a 候选全部双命中': zero ? 'n/a' : (doubleHitMiss.length === 0 && eachSourceHasTool ? 'PASS' : 'FAIL'),
+      // 仅物种命中（物种识别成功、意图为空）→ 必须直接拒答：state=B 且候选 0。
+      // 这类题最容易出的事故是"物种接得住"被当成"能力也接得住"，于是给出候选让模型照着调。
+      '仅物种命中→state B 且候选 0': speciesOnly
+        ? (raw.state === 'B' && candidates.length === 0
+          ? 'PASS'
+          : `FAIL state=${raw.state ?? '(缺)'} 候选=${candidates.length}`)
+        : 'n/a',
+      '①-b 全部命中源': expectedSources === null
+        ? '不判（含点名源/未覆盖物种/分句/多物种）'
+        : (missing.length === 0 ? 'PASS' : `FAIL 缺源 ${missing.join(',')}`),
+      '①-c 未展示源必须明说': zero ? 'n/a' : (dropConsistent ? 'PASS' : `FAIL 渲染 ${renderedCount} / 命中 ${candidates.length}`),
+      'M-1 逐物种交代（识别物种 ⊆ 交代物种）': speciesAccounting,
+      'M-2 有候选不得整题拒答': m2,
+      'M-3 全部无覆盖必须拒答且候选 0': m3,
+      '意图识别（与题集期望一致）': expectIntents === null ? 'n/a' : (intentMismatch === null ? 'PASS' : `FAIL ${intentMismatch}`),
+      '定向断言（必给/不得给工具）': (expect.tools ?? []).length === 0 && (expect.notTools ?? []).length === 0
+        ? 'n/a'
+        : missingTool.length > 0 ? `FAIL 缺工具 ${missingTool.join(',')}`
+          : forbiddenTool.length > 0 ? `FAIL 不该给 ${forbiddenTool.join(',')}` : 'PASS',
+      '计算类硬排除（前置于意图识别）': hardExcludeCheck,
+      '没接 ≠ 不做（没接侧）': uncoveredCheck,
+      '物种提示分档（A 没给 / B 给了未识别）': speciesGapCheck,
+      'N1 已接物种范围（注册表现算集合）': n1,
+      'N2 拼写提示只在 B 档且指向已接物种': n2,
+      'N3 A 档必须仍给「请补充物种」指引': n3,
+      '② 零候选如实说不覆盖': zero ? (saysNoCover ? 'PASS' : 'FAIL 没写没有覆盖') : 'n/a',
+      '② 不把能力缺口写成物种没人接': coverageBothKinds ? 'PASS' : 'FAIL 只有物种不覆盖的解释',
+      '② 点名源不得与"没能识别出可用意图"并存': contradiction ? 'FAIL' : 'PASS',
+      '③ 工具名在 MCP 清单内': returnedTools.length === 0 ? 'n/a' : (notInMcp.length === 0 ? 'PASS' : `FAIL ${notInMcp.join(',')}`),
+      '③ 工具带 parameters': noSchema.length === 0 ? 'PASS' : `FAIL ${noSchema.join(',')}`,
+      '零上游（检索层不该联网）': upstreamAttempts === 0 ? 'PASS' : `FAIL 发了 ${upstreamAttempts} 次`,
+    };
+
+    rows.push({
+      id: c.id, question: c.q, state: raw.state,
+      species: recognized.species, intents: recognized.intents, namedSources: recognized.sources,
+      candidateCount: candidates.length, renderedCount, candidates, returnedTools,
+      speciesVerdicts: verdicts,
+      doubleHitMiss, expectedSources, expectedTools: expectedToolsAll, missingSources: missing, toolsNotOffered,
+      checks, textBytes: Buffer.byteLength(text, 'utf8'), text,
+    });
+  }
+
+  /**
+   * `hub_status` 展示口径（AGENTS.md v2.3「源市场制」）——这类"展示"最容易在下次改动里
+   * 被顺手改回旧口径，所以这里用**禁止模式**断言，而不是只断言新文案存在：
+   *   - 禁止 `源 8/20`、`工具 37/40` 这类像上限的分母（全库本来没有上限）；
+   *   - 禁止「剩余额度 N」（旧口径的产物，会让人以为"再铺就到顶了"）；
+   *   - 必须报订阅集硬上限 80 与其 token 代价、默认集软建议 40。
+   * 阈值不在这里写死：先从 `dist/service/budget.js` 读常量，再核"常量仍是 v2.3 的 80/40"，
+   * 这样既防展示回退，也防有人悄悄改常量而不改规则。
+   */
+  const budgetMod = await import(pathToFileURL(join(repoRoot, 'dist', 'service', 'budget.js')).href);
+  const hardMax = budgetMod.SUBSET_TOOLS_HARD_MAX;
+  const softMax = budgetMod.DEFAULT_SET_TOOLS_SOFT_MAX;
+  const statusTool = registry.listMetaTools().find((t) => t.name === 'hub_status');
+  const status = await statusTool.run({}, ctx); // ctx.http 会抛错并计数：顺带验证 hub_status 不联网
+  const stText = status.text ?? '';
+  const market = status.raw?.market ?? {};
+  const denominator = /(?:源|工具)\s*\d+\s*\/\s*\d+/;
+  const quotaWord = /剩余.{0,6}额度|还能加\s*\d+\s*个/;
+  const statusChecks = {
+    'hub_status 常量仍是 v2.3（80/40）': (hardMax === 80 && softMax === 40)
+      ? 'PASS'
+      : `FAIL 硬上限=${hardMax} 软建议=${softMax}，规则 v2.3 写死 80/40`,
+    'hub_status 不带 /20 /40 式分母': denominator.test(stText)
+      ? `FAIL 出现分母「${(stText.match(denominator) ?? [])[0]}」`
+      : 'PASS',
+    'hub_status 不出现"剩余额度"': quotaWord.test(stText)
+      ? `FAIL 出现旧口径「${(stText.match(quotaWord) ?? [])[0]}」`
+      : 'PASS',
+    'hub_status 报订阅集硬上限 80': new RegExp(`硬阈值[^\\n]*${hardMax}`).test(stText) ? 'PASS' : 'FAIL 没写硬阈值 80',
+    'hub_status 报默认集软建议 40': new RegExp(`软建议[^\\n]*${softMax}`).test(stText) ? 'PASS' : 'FAIL 没写软建议 40',
+    'hub_status 报 token 代价 22,400': /22,400/.test(stText) ? 'PASS' : 'FAIL 没写 token 代价',
+    'hub_status raw.market 与常量一致': (market.subsetToolsHardMax === hardMax
+      && market.defaultSetSoftMax === softMax
+      && market.estTokensPerTool === 280
+      && market.subsetToolsHardMaxTokens === hardMax * 280
+      && market.librarySources === registry.listSources().length)
+      ? 'PASS'
+      : `FAIL ${JSON.stringify(market)}`,
+  };
+
+  const fails = rows.flatMap((r) => Object.entries(r.checks)
+    .filter(([, v]) => String(v).startsWith('FAIL'))
+    .map(([k, v]) => `${r.id} ${k}: ${v}`))
+    .concat(Object.entries(statusChecks)
+      .filter(([, v]) => String(v).startsWith('FAIL'))
+      .map(([k, v]) => `hub_status ${k}: ${v}`));
+
+  const sha = (p) => createHash('sha256').update(readFileSync(p)).digest('hex').toUpperCase();
+  const summary = {
+    ranAt: new Date().toISOString(), node: process.version, rule: cases.rule ?? 'AGENTS.md v2.2 §10.2',
+    casesFile: { path: casesPath, sha256: sha(casesPath) },
+    script: { path: fileURLToPath(import.meta.url), sha256: sha(fileURLToPath(import.meta.url)) },
+    // 预算数字必须绑定"本次构建"：这里记录被加载的 dist 产物哈希（先 npm run build 再跑）
+    dist: {
+      'sources/index.js': sha(join(repoRoot, 'dist/sources/index.js')),
+      'retrieval/find-sources.js': sha(join(repoRoot, 'dist/retrieval/find-sources.js')),
+      'retrieval/capability-catalog.js': sha(join(repoRoot, 'dist/retrieval/capability-catalog.js')),
+    },
+    registry: {
+      sourceCount: registry.listSources().length,
+      toolCount: allNames.size,
+      mcpToolCount: mcpTools.length,
+      upstreamAttempts,
+    },
+    statusChecks,
+    rows, failCount: fails.length, fails,
+  };
+  writeFileSync(outPath, JSON.stringify(summary, null, 2), 'utf8');
+
+  for (const r of rows) {
+    const flag = Object.values(r.checks).some((v) => String(v).startsWith('FAIL')) ? 'FAIL' : 'PASS';
+    console.log(`${flag} ${r.id} 候选=${r.candidateCount} 工具=${r.returnedTools.length} 意图=[${r.intents.join(',')}] `
+      + Object.entries(r.checks).map(([k, v]) => `${k}=${v}`).join(' | '));
+  }
+  for (const [k, v] of Object.entries(statusChecks)) {
+    console.log(`${String(v).startsWith('FAIL') ? 'FAIL' : 'PASS'} ${k}=${v}`);
+  }
+  console.log(`\n合计 ${rows.length} 题，FAIL 项 ${fails.length}；零上游尝试 ${upstreamAttempts} 次；saved ${outPath}`);
+  if (fails.length) console.log(fails.join('\n'));
+  return fails.length === 0 ? 0 : 1;
+}
+
+/* ─────────────── 入口 ─────────────── */
+
+const callIndex = process.argv.indexOf('--call');
+let code;
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log('用法：node scripts/retrieval-selftest.mjs [--repo <root>] [--out <json>] [--cases <json>]');
+  console.log('      node scripts/retrieval-selftest.mjs --list-tools');
+  console.log('      node scripts/retrieval-selftest.mjs --call "问题"');
+  code = 0;
+} else if (process.argv.includes('--list-tools')) {
+  code = await modeListTools();
+} else if (callIndex >= 0) {
+  const question = process.argv[callIndex + 1];
+  if (!question || question.startsWith('--')) {
+    console.error('--call 需要一个自然语言问题（加引号）');
+    code = 2;
+  } else {
+    code = await modeCall(question);
+  }
+} else {
+  code = await modeJudge();
+}
+process.exit(code);

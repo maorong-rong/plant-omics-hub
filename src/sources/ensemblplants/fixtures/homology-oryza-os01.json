@@ -1,0 +1,93 @@
+{
+  "capture": {
+    "url": "https://rest.ensembl.org/homology/id/oryza_sativa/Os01g0100100?type=all;content-type=application/json",
+    "at": "2026-11-10T08:16:44.559211Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 643943,
+    "simulated": false,
+    "cropping": "trimmed: homologies 只保留 6 条样本（2 拟南芥 / 2 水稻 / 1 人 / 1 其他），并删除 align_seq/cigar_line；原始 643,943 B / 263 条",
+    "note": "真实抓取 2026-11-10；644 KB 整包不入库，只留解析回归所需的裁剪件"
+  },
+  "payload": {
+    "data": [
+      {
+        "id": "Os01g0100100",
+        "homologies": [
+          {
+            "type": "ortholog_one2many",
+            "target": {
+              "protein_id": "AT2G43490.7",
+              "id": "AT2G43490",
+              "perc_id": 45.1007,
+              "species": "arabidopsis_thaliana",
+              "perc_pos": 59.4631
+            },
+            "dn_ds": null,
+            "taxonomy_level": "Mesangiospermae"
+          },
+          {
+            "type": "ortholog_one2many",
+            "target": {
+              "species": "arabidopsis_thaliana",
+              "perc_pos": 60.0806,
+              "protein_id": "AT3G59570.3",
+              "id": "AT3G59570",
+              "perc_id": 45.4301
+            },
+            "dn_ds": null,
+            "taxonomy_level": "Mesangiospermae"
+          },
+          {
+            "type": "other_paralog",
+            "target": {
+              "protein_id": "Os06t0661700-01",
+              "perc_id": 7.11409,
+              "id": "Os06g0661700",
+              "species": "oryza_sativa",
+              "perc_pos": 13.4228
+            },
+            "dn_ds": null,
+            "taxonomy_level": "Eukaryota"
+          },
+          {
+            "type": "other_paralog",
+            "target": {
+              "protein_id": "Os08t0518100-01",
+              "id": "Os08g0518100",
+              "perc_id": 5.15588,
+              "perc_pos": 11.1511,
+              "species": "oryza_sativa"
+            },
+            "dn_ds": null,
+            "taxonomy_level": "Eukaryota"
+          },
+          {
+            "type": "ortholog_many2many",
+            "target": {
+              "perc_id": 5.71429,
+              "id": "ENSG00000142459",
+              "protein_id": "ENSP00000445905",
+              "species": "homo_sapiens",
+              "perc_pos": 13.5404
+            },
+            "dn_ds": null,
+            "taxonomy_level": "Eukaryota"
+          },
+          {
+            "type": "other_paralog",
+            "target": {
+              "species": "oryza_sativa",
+              "perc_pos": 37.5427,
+              "protein_id": "Os10t0518100-01",
+              "id": "Os10g0518100",
+              "perc_id": 22.0137
+            },
+            "dn_ds": null,
+            "taxonomy_level": "Eukaryota"
+          }
+        ]
+      }
+    ]
+  }
+}

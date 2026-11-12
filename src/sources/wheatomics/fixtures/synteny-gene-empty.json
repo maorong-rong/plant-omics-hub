@@ -1,0 +1,20 @@
+{
+  "capture": {
+    "url": "https://wheatomics.sdau.edu.cn/api/synteny/search?ID=TraesCS1A02G013100",
+    "at": "2026-11-10T08:15:03.778139Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 110,
+    "simulated": false,
+    "note": "真实抓取 2026-11-10；110 B；02G 单基因在默认表 CSsymaptbl 回 count=0"
+  },
+  "payload": {
+    "success": true,
+    "message": "ok",
+    "timestamp": "2026-11-10T08:14:51.610443+00:00",
+    "data": {
+      "count": 0,
+      "records": []
+    }
+  }
+}

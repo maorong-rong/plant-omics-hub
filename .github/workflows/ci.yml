@@ -1,0 +1,44 @@
+# PR 离线全检：把本地 `npm run check` 变成合并前必须过的闸。
+#
+# `npm run check` 包含类型检查、离线用例、构建、数量闸、站点闸、措辞闸与契约闸，
+# 全程离线（fixture 回放，不联网），因此这里不设 token、不读 secrets。
+# 联网的 probe 与发布检查不在本工作流中运行。
+
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+
+# 公开仓、只读检出：不给写权限，所以 fork PR 也能跑（不需要 secrets）。
+permissions:
+  contents: read
+
+# 同一 PR 的新提交推送后，取消上一轮还在跑的任务，避免排队浪费额度。
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: npm ci && npm run check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 检出
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          # 与本地开发保持一致
+          node-version: '22.14.0'
+          cache: npm
+
+      # 严格按 lock 复现依赖；不跑 npm install，避免 CI 悄悄改 package-lock.json
+      - name: npm ci（按 lock 复现）
+        run: npm ci
+
+      # 与本地完全同一条命令：typecheck / test / build / check:counts / check:site / check:wording / stats
+      - name: npm run check
+        run: npm run check

@@ -1,0 +1,19 @@
+{
+  "capture": {
+    "url": "https://wheatomics.sdau.edu.cn/api/ppi/query?gene_ids=TraesCS1A02G013100&table=PPI_poppin",
+    "at": "2026-11-10T08:12:27.157794Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 105,
+    "simulated": false,
+    "note": "真实抓取 2026-11-10；105 B；interactions=[]（合法空）"
+  },
+  "payload": {
+    "success": true,
+    "message": "ok",
+    "timestamp": "2026-11-10T08:12:19.680699+00:00",
+    "data": {
+      "interactions": []
+    }
+  }
+}

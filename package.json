@@ -1,0 +1,112 @@
+{
+  "name": "plantomics-hub",
+  "version": "0.1.2",
+  "description": "PlantOmics Hub：把国内植物组学数据库的公开接口聚合成一套工具，一次维护、两个出口：stdio MCP server（Claude Code / Codex / Reasonix 可用）与 DSH 原生插件。",
+  "type": "module",
+  "license": "UNLICENSED",
+  "main": "./dist/dsh/index.js",
+  "types": "./dist/dsh/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/dsh/index.d.ts",
+      "default": "./dist/dsh/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/server.d.ts",
+      "default": "./dist/mcp/server.js"
+    },
+    "./client": "./dist/client/panel.js",
+    "./registry": {
+      "types": "./dist/core/registry.d.ts",
+      "default": "./dist/core/registry.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "plantomics-hub-mcp": "dist/service/cli.js",
+    "plant-omics-mcp": "dist/mcp/cli.js"
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "README.md",
+    "scripts/start-service.ps1"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "probe": "node scripts/probe.mjs",
+    "probe:tools": "node scripts/probe-tools.mjs --all",
+    "stats": "node scripts/stats.mjs",
+    "counts": "node scripts/counts.mjs",
+    "check:counts": "node scripts/counts.mjs --check",
+    "check:contracts": "node scripts/check-contracts.mjs",
+    "check:site": "node scripts/check-site.mjs",
+    "check:wording": "node web/scripts/check-wording.mjs",
+    "counts:published": "node scripts/counts.mjs --published",
+    "status:report": "node scripts/status-report.mjs",
+    "status:check": "node scripts/status-report.mjs --check",
+    "check:market": "node scripts/check-market.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "install:dsh": "node scripts/install-dsh.mjs",
+    "check": "npm run typecheck && npm run test && npm run build && npm run check:counts && npm run check:site && npm run check:wording && npm run stats && npm run check:contracts",
+    "mcp": "node dist/mcp/cli.js",
+    "serve": "node dist/service/cli.js"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "mcp",
+    "model-context-protocol",
+    "植物组学",
+    "植物",
+    "组学",
+    "plant-omics",
+    "plantdata",
+    "bioinformatics",
+    "wheatomics",
+    "strawberry",
+    "gramene",
+    "ic4r",
+    "ngdc"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-plugin-market-index": "0.2.1-rc.2",
+    "@types/node": "^24.0.0",
+    "gpt-tokenizer": "2.9.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0",
+    "yaml": "^2.9.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.2"
+  },
+  "author": {
+    "name": "maorong-rong",
+    "email": "299401268+maorong-rong@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/maorong-rong/plant-omics-hub#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maorong-rong/plant-omics-hub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/maorong-rong/plant-omics-hub/issues"
+  }
+}

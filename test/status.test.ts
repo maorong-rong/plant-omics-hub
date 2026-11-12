@@ -1,0 +1,349 @@
+/**
+ * `hub_status` 的离线验收题集。
+ *
+ * 三条主线（对应契约 R1–R3 中与"体检"有关的部分）：
+ *   1. **只读本地**：任何输入都不得产生网络请求（用会抛错的 fetcher 证明）；
+ *   2. **数字不猜**：源数/工具数必须等于注册表实测，预算上限必须等于 budget 常量；
+ *   3. **不冒充上游可用**：输出恒带"不访问上游/不承诺可用"的免责行；
+ *      并且"没覆盖"要如实说没有，不许拿别的意图凑。
+ *
+ * 另一个重点：**目录与注册表双向一致**——本文件断言 `hub_status` 报出的规模
+ * 与 `createRegistry()` 实测一致；工具级双向一致另有 catalog-consistency 测试。
+ */
+
+import { describe, expect, it } from 'vitest';
+
+import { utf8Bytes } from '../src/core/format.js';
+import { InvalidArgumentError } from '../src/core/errors.js';
+import type { Fetcher, ToolDefinition } from '../src/core/types.js';
+import { createRegistry } from '../src/sources/index.js';
+import { DEFAULT_SET_TOOLS_SOFT_MAX, MAX_SOURCES, MAX_TOOLS, SUBSET_TOOLS_HARD_MAX } from '../src/service/budget.js';
+import { INTENTS, SOURCE_SEMANTICS, TOOL_CAPABILITIES } from '../src/retrieval/capability-catalog.js';
+import { buildStatusReport, createStatusTool, type StatusSnapshot } from '../src/retrieval/status.js';
+import { statusSnapshotOf } from '../src/retrieval/index.js';
+
+/** 任何 HTTP 调用都算违规：本工具必须是纯本地。 */
+const forbiddenHttp = (async (url: string) => {
+  throw new Error(`hub_status 不应发起任何网络请求，但请求了 ${url}`);
+}) as Fetcher;
+
+const FIXED_VERSION = '0.1.0+svc.3.test';
+
+function realSnapshot(): StatusSnapshot {
+  const registry = createRegistry();
+  return statusSnapshotOf(registry, FIXED_VERSION);
+}
+
+function statusTool(): ToolDefinition {
+  return createStatusTool(realSnapshot());
+}
+
+describe('hub_status：只读本地目录', () => {
+  it('无参数调用产出体检报告，且零网络请求', async () => {
+    const result = await statusTool().run({}, { http: forbiddenHttp });
+    expect(result.text).toContain('服务端版本：0.1.0+svc.3.test');
+    expect(result.meta.sourceId).toBe('hub');
+    expect(result.meta.url).toBe('local://registry+catalog');
+  });
+
+  it('六个源全部列出，且每个源的工具数与注册表一致（双向一致的下半程）', async () => {
+    const registry = createRegistry();
+    const result = await statusTool().run({}, { http: forbiddenHttp });
+    for (const bundle of registry.listSources()) {
+      expect(result.text).toContain(bundle.manifest.id);
+      expect(result.raw.sources).toBe(registry.listSources().length);
+      const reported = result.text.split('\n').find((line) => line.startsWith(`| ${bundle.manifest.id}`));
+      expect(reported, `${bundle.manifest.id} 未出现在表格里`).toBeDefined();
+      expect(reported).toContain(`| ${bundle.tools.length} |`);
+    }
+    // sourceTools 只数**源工具**；元工具（hub_*）单列在 metaToolNames，不混进这个数
+expect(result.raw.sourceTools).toBe(registry.listTools().filter((t) => !t.name.startsWith('hub_')).length);
+  });
+
+  it('预算口径取自 budget 常量：历史 20/40 仍导出但只作兼容，正文只报 v2.3 事实', async () => {
+    const result = await statusTool().run({}, { http: forbiddenHttp });
+    // v2.3 废止了"全库 20 源 / 40 工具"的阈值：raw.budget 保留只为兼容既有前端与断言，
+    // 不参与任何判定；**正文不再出现这两个数字作为分母或"额度"**（见文件末尾的防回退断言）。
+    expect(result.raw.budget.maxSources).toBe(MAX_SOURCES);
+    expect(result.raw.budget.maxTools).toBe(MAX_TOOLS);
+    // 展示口径的唯一事实来源是 raw.market，且必须等于 budget.ts 的常量
+    expect(result.raw.market.subsetToolsHardMax).toBe(SUBSET_TOOLS_HARD_MAX);
+    expect(result.raw.market.defaultSetSoftMax).toBe(DEFAULT_SET_TOOLS_SOFT_MAX);
+    expect(result.raw.market.librarySources).toBe(result.raw.sources);
+    expect(result.raw.market.libraryTools).toBe(result.raw.totalTools);
+  });
+
+  it('raw.sourceList 逐源摊平，字段与注册表一致，且与文本表格同一份口径', async () => {
+    const registry = createRegistry();
+    const result = await statusTool().run({}, { http: forbiddenHttp });
+    const list = result.raw.sourceList;
+    expect(list).toHaveLength(registry.listSources().length);
+    for (const entry of list) {
+      const bundle = registry.listSources().find((b) => b.manifest.id === entry.id);
+      expect(bundle, `${entry.id} 不在注册表里`).toBeDefined();
+      expect(entry.displayName).toBe(bundle!.manifest.displayName);
+      expect(entry.tier).toBe(bundle!.manifest.tier);
+      expect(entry.toolCount).toBe(bundle!.tools.length);
+      expect(entry.species).toEqual([...bundle!.manifest.species]);
+      expect(entry.versionNote).toBe(bundle!.manifest.versionNote);
+      // 语义与政策必须来自能力目录，不允许前端/界面另写一份
+      expect(entry.semantics).toBe(SOURCE_SEMANTICS[entry.id].semantics);
+      expect(entry.policy).toBe(SOURCE_SEMANTICS[entry.id].policy);
+      expect(entry.semanticsUnknown).toBe(false);
+      // 文本表格那一行必须与结构体说同一件事
+      const row = result.text.split('\n').find((line) => line.startsWith(`| ${entry.id}（`));
+      expect(row, `${entry.id} 未出现在表格里`).toBeDefined();
+      expect(row).toContain(entry.semantics);
+      expect(row).toContain(`| ${entry.toolCount} |`);
+    }
+    // 逐源工具数之和必须等于 sourceTools，否则就是两套口径
+    expect(list.reduce((sum, entry) => sum + entry.toolCount, 0)).toBe(result.raw.sourceTools);
+  });
+
+  it('未登记语义的源被显式标出，不混进"承诺"里', () => {
+    const base = realSnapshot();
+    const injected: StatusSnapshot = {
+      ...base,
+      sources: [
+        ...base.sources,
+        { id: 'not-registered', displayName: '未登记源', tier: 'T2', toolCount: 0, species: ['水稻'], versionNote: '未知' },
+      ],
+    };
+    const report = buildStatusReport(injected, '2026-10-29T00:00:00.000Z');
+    const entry = report.raw.sourceList.find((row) => row.id === 'not-registered');
+    expect(entry?.semanticsUnknown).toBe(true);
+    expect(entry?.semantics).toBe('未登记语义');
+    expect(entry?.policy).toBeNull();
+    expect(report.text).toContain('未登记语义');
+  });
+
+  it('规模是"源工具＋元工具"分开计，总数计入 40 预算', async () => {
+    const snapshot = realSnapshot();
+    const report = buildStatusReport(snapshot, '2026-10-29T00:00:00.000Z');
+    expect(report.raw.metaTools).toBe(snapshot.metaToolNames.length);
+    expect(report.raw.totalTools).toBe(report.raw.sourceTools + report.raw.metaTools);
+    expect(report.text).toContain(`＋元工具 ${report.raw.metaTools}＝${report.raw.totalTools}`);
+  });
+
+  it('注入元工具后总数增加，按默认集软建议对照（只警示、不拒绝）', async () => {
+    const base = realSnapshot();
+    const withMeta: StatusSnapshot = { ...base, metaToolNames: ['hub_find_sources', 'hub_status'] };
+    const report = buildStatusReport(withMeta, '2026-10-29T00:00:00.000Z');
+    expect(report.raw.totalTools).toBe(report.raw.sourceTools + 2);
+    // v2.3：全库没有"额度"这回事，只有"默认集软建议 ≤40"这条对照；
+    // 不再出现 20/40 这类像上限的分母（防回退断言在文件末尾单独钉一条）。
+    expect(report.text).toMatch(/软建议 ≤ 40|已超软建议 40/);
+    expect(report.text).not.toMatch(/剩余.{0,6}额度/);
+  });
+
+  it('默认集超过软建议 40 只警示，不判异常、不拒绝（v2.3 全库不设上限）', () => {
+    const base = realSnapshot();
+    const overflow: StatusSnapshot = {
+      ...base,
+      metaToolNames: Array.from({ length: DEFAULT_SET_TOOLS_SOFT_MAX + 5 }, (_, i) => `hub_fake_${i}`),
+    };
+    const report = buildStatusReport(overflow, '2026-10-29T00:00:00.000Z');
+    expect(report.raw.totalTools).toBeGreaterThan(DEFAULT_SET_TOOLS_SOFT_MAX);
+    expect(report.raw.market.defaultSetOverSoftMax).toBe(true);
+    expect(report.text).toContain('已超软建议');
+    // 「已超预算」是旧口径的词：v2.3 下超软建议不构成异常状态
+    expect(report.text).not.toContain('已超预算');
+    expect(report.text).not.toMatch(/剩余.{0,6}额度/);
+  });
+
+  /**
+   * 防回退（2026-11-01 维护者要求）：这类"展示"最容易在下次改动里被顺手改回旧口径。
+   *
+   * 断言用**禁止模式**而非只核新文案存在——换种同义表述不该假红，
+   * 但只要「剩余额度 / 已超预算 / 源 x/20 / 工具 x/40」回来一条就红。
+   */
+  it('防回退：正文不得再现"剩余额度 / 已超预算 / 源 x/20 / 工具 x/40"', async () => {
+    const result = await statusTool().run({}, { http: forbiddenHttp });
+    const text = result.text;
+    expect(text).not.toMatch(/剩余.{0,6}额度/);
+    expect(text).not.toContain('已超预算');
+    expect(text).not.toMatch(/(?:源|工具)\s*\d+\s*\/\s*\d+/);
+    // 新口径三件必须都在
+    expect(text).toMatch(/全库[^\n]*不设上限/);
+    expect(text).toMatch(/硬阈值[^\n]*80/);
+    expect(text).toMatch(/软建议[^\n]*40/);
+    expect(text).toContain('22,400');
+  });
+});
+
+describe('hub_status：不冒充上游可用', () => {
+  it('输出恒带"不是上游可用性"的免责行与完整尾注', async () => {
+    const result = await statusTool().run({}, { http: forbiddenHttp });
+    expect(result.text).toContain('不是上游可用性');
+    expect(result.text).toContain('不访问任何上游');
+    // 尾注四要素：源 / 完整调用 / 无上游请求 / 版本与时刻
+    expect(result.text).toContain('源：plantomics-hub 本地目录');
+    expect(result.text).toContain('hub_status()');
+    expect(result.text).toContain('无上游请求');
+    expect(result.text).toContain('查询时刻');
+  });
+
+  it('不输出"数据不存在/查无"这类结论', async () => {
+    const result = await statusTool().run({}, { http: forbiddenHttp });
+    expect(result.text).not.toContain('数据不存在');
+    expect(result.text).not.toContain('查无');
+  });
+
+  it('确定性：同一快照两次产出正文逐字节相同（仅时刻可变）', () => {
+    const snapshot = realSnapshot();
+    const at = '2026-10-29T00:00:00.000Z';
+    const first = buildStatusReport(snapshot, at).text;
+    const second = buildStatusReport(snapshot, at).text;
+    expect(first).toBe(second);
+    expect(utf8Bytes(first)).toBeLessThanOrEqual(4 * 1024);
+  });
+});
+
+describe('hub_status：意图筛选与"没有就说没有"', () => {
+  it('intent=表达 只列有表达工具的源', async () => {
+    const result = await statusTool().run({ intent: '表达' }, { http: forbiddenHttp });
+    expect(result.text).toContain('wheatomics');
+    expect(result.text).not.toContain('| gwh');
+    expect(result.meta.request).toContain('intent=表达');
+  });
+
+  it('intent 用英文 id 也认（expression）', async () => {
+    const result = await statusTool().run({ intent: 'expression' }, { http: forbiddenHttp });
+    expect(result.text).toContain('wheatomics');
+  });
+
+  it('不存在的意图直接拒，并列出可用意图——不拿别的意图凑', async () => {
+    await expect(statusTool().run({ intent: '蛋白结构预测' }, { http: forbiddenHttp }))
+      .rejects.toBeInstanceOf(InvalidArgumentError);
+    await expect(statusTool().run({ intent: '蛋白结构预测' }, { http: forbiddenHttp }))
+      .rejects.toThrow(/没有意图「蛋白结构预测」/);
+  });
+
+  it('空串 intent 被拒，不静默当全景', async () => {
+    await expect(statusTool().run({ intent: '  ' }, { http: forbiddenHttp }))
+      .rejects.toBeInstanceOf(InvalidArgumentError);
+  });
+
+  it('未知参数被 invoke 层拒绝（additionalProperties=false）', async () => {
+    await expect(
+      statusTool().run({ unknown_param: 1 }, { http: forbiddenHttp }),
+    ).rejects.toBeInstanceOf(InvalidArgumentError);
+  });
+});
+
+describe('RETR-09：正文截断不许丢掉出处与免责行', () => {
+  it('超长目录触发截断时，尾注、查询时刻、免责行必须完整保留', () => {
+    const registry = createRegistry();
+    const wheat = registry.listSources().find((bundle) => bundle.manifest.id === 'wheatomics');
+    const snapshot: StatusSnapshot = {
+      version: 'review-fixed',
+      sources: [{
+        id: 'wheatomics',
+        // 合成超长名称，只用于边界测试，不声称真实源名如此
+        displayName: '长名称'.repeat(600),
+        tier: 'T1',
+        toolCount: wheat?.tools.length ?? 0,
+        species: ['Triticum aestivum'],
+        versionNote: '未知',
+      }],
+      enabledTools: (wheat?.tools ?? []).map((tool) => tool.name),
+      metaToolNames: [],
+    };
+
+    const report = buildStatusReport(snapshot, '2026-10-29T00:00:00.000Z');
+
+    expect(report.text).toContain('正文已按预算截断');
+    // 不可截部分逐项都在
+    expect(report.text).toContain('源：plantomics-hub 本地目录｜hub_status()｜无上游请求');
+    expect(report.text).toContain('查询时刻 2026-10-29T00:00:00.000Z');
+    expect(report.text).toContain('本工具不访问任何上游');
+    expect(report.text).toContain('不是上游可用性');
+    // 尾注确实在最后一行，且整包不超预算
+    expect(report.text.trimEnd().endsWith('查询时刻 2026-10-29T00:00:00.000Z')).toBe(true);
+    expect(utf8Bytes(report.text)).toBeLessThanOrEqual(4 * 1024);
+  });
+});
+
+describe('RETR-10：只报当前启用集，不把未启用源的能力当现状', () => {
+  const full = statusSnapshotOf(createRegistry(), FIXED_VERSION);
+  const wheatOnly: StatusSnapshot = {
+    ...full,
+    sources: full.sources.filter((source) => source.id === 'wheatomics'),
+    enabledTools: full.enabledTools.filter((name) => name.startsWith('wheatomics_')),
+  };
+
+  it('单源快照不再列出别的源才有的意图（circrna/lncrna/内参/组装/样本）', () => {
+    const report = buildStatusReport(wheatOnly, '2026-10-29T00:00:00.000Z');
+    const ids = report.raw.intents.map((row) => row.id);
+    expect(ids).toContain('gene-search');
+    for (const absent of ['circrna', 'lncrna', 'reference-gene', 'assembly', 'sample']) {
+      expect(ids, `单源快照不应报出 ${absent}`).not.toContain(absent);
+    }
+    // 被过滤掉的条目要如实计数，不能假装目录里没有
+    expect(report.raw.catalogEntriesNotEnabled).toBeGreaterThan(0);
+    expect(report.text).toContain('因所属源未启用而不计入');
+  });
+
+  it('意图筛选只认启用集：icg 的内参基因在单源快照里 → 拒并列出可用意图', async () => {
+    await expect(
+      createStatusTool(wheatOnly).run({ intent: '内参' }, { http: forbiddenHttp }),
+    ).rejects.toThrow(/没有意图「内参」/);
+  });
+
+  it('快照不自洽（工具数之和对不上启用清单）→ 抛错，不输出错数字', () => {
+    const broken: StatusSnapshot = { ...wheatOnly, enabledTools: [...wheatOnly.enabledTools, 'fake_extra_tool'] };
+    expect(() => buildStatusReport(broken, '2026-10-29T00:00:00.000Z'))
+      .toThrow(/快照不自洽/);
+  });
+});
+
+describe('RETR-11（实跑新发现）：元工具计数必须等于真实注册表', () => {
+  it('接线后 hub_status 报的元工具数与 tools/list 实际一致（构造期取值会报成 0）', async () => {
+    const registry = createRegistry();
+    const tool = registry.getTool('hub_status');
+    expect(tool, 'hub_status 未接线进注册表').toBeDefined();
+
+    const result = await tool!.run({}, { http: forbiddenHttp });
+    const metaCount = registry.listMetaTools().length;
+    expect(metaCount).toBeGreaterThan(0); // 接线后至少 hub_find_sources + hub_status
+    expect(result.raw.metaTools).toBe(metaCount);
+    // 总工具数必须与 /healthz、tools/list 同一口径（业务工具 + 元工具）
+    expect(result.raw.totalTools).toBe(registry.listTools().length);
+    expect(result.text).toContain(`元工具 ${metaCount}＝`);
+  });
+
+  it('hub_find_sources 尾注里的规模同样取运行时值（构造期会写成 30）', async () => {
+    const registry = createRegistry();
+    const tool = registry.getTool('hub_find_sources');
+    expect(tool, 'hub_find_sources 未接线进注册表').toBeDefined();
+
+    const out = await tool!.run({ question: '小麦已知基因' }, { http: forbiddenHttp });
+    // 2026-11-03 尾注改为「目录快照：全库目录 N 源 / M 条能力登记」（T10：两数并列，不许只报本会话规模）。
+    // 断言**运行时值本身**，不写死 41/39——写死就等于把当时的数字抄进测试，下次接源又要手改。
+    expect(out.text).toContain(`全库目录 ${registry.listSources().length} 源`);
+    expect(out.text).toContain(`${TOOL_CAPABILITIES.length} 条能力登记`);
+  });
+});
+
+describe('hub_status：目录自洽', () => {
+  it('每个源在 SOURCE_SEMANTICS 里都有语义（否则表格会写"未登记语义"）', () => {
+    const report = buildStatusReport(realSnapshot(), '2026-10-29T00:00:00.000Z');
+    expect(report.text).not.toContain('未登记语义');
+  });
+
+  it('意图覆盖统计与目录逐条相符（不是凭印象写的）', () => {
+    const report = buildStatusReport(realSnapshot(), '2026-10-29T00:00:00.000Z');
+    const expected = new Map<string, number>();
+    for (const capability of TOOL_CAPABILITIES) {
+      for (const intent of capability.intents) {
+        expected.set(intent, (expected.get(intent) ?? 0) + 1);
+      }
+    }
+    for (const row of report.raw.intents) {
+      expect(row.toolCount).toBe(expected.get(row.id));
+      expect(INTENTS.some((intent) => intent.id === row.id)).toBe(true);
+    }
+    // 目录里挂载的每个意图都必须在统计里出现，不许漏
+    expect(report.raw.intents).toHaveLength(expected.size);
+  });
+});

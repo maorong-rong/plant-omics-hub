@@ -1,0 +1,84 @@
+{
+  "capture": {
+    "url": "POST https://wheatomics.sdau.edu.cn/api/kegg",
+    "at": "2026-11-10T08:11:53.892680Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 1051,
+    "simulated": false,
+    "note": "真实抓取 2026-11-10；POST 同一组基因；1,051 B / 0.49 s；N=91160 n=4 gene_count=4 results=6"
+  },
+  "payload": {
+    "N": 91160,
+    "n": 4,
+    "results": [
+      {
+        "id": "ko05418",
+        "term": "",
+        "ontology": "",
+        "name": "Fluid shear stress and atherosclerosis",
+        "k": 2,
+        "K": 1488,
+        "ratio": 30.6317,
+        "pvalue": 0.0015630636189580827,
+        "padj": 0.020319827046455075
+      },
+      {
+        "id": "ko04726",
+        "term": "",
+        "ontology": "",
+        "name": "Serotonergic synapse",
+        "k": 1,
+        "K": 238,
+        "ratio": 95.7563,
+        "pvalue": 0.010402520951253491,
+        "padj": 0.04836203292890864
+      },
+      {
+        "id": "ko04011",
+        "term": "",
+        "ontology": "",
+        "name": "MAPK signaling pathway - yeast",
+        "k": 1,
+        "K": 441,
+        "ratio": 51.678,
+        "pvalue": 0.019210941423179362,
+        "padj": 0.04836203292890864
+      },
+      {
+        "id": "ko04148",
+        "term": "",
+        "ontology": "",
+        "name": "Efferocytosis",
+        "k": 1,
+        "K": 466,
+        "ratio": 48.9056,
+        "pvalue": 0.020291640878992157,
+        "padj": 0.04836203292890864
+      },
+      {
+        "id": "ko04928",
+        "term": "",
+        "ontology": "",
+        "name": "Parathyroid hormone synthesis, secretion and action",
+        "k": 1,
+        "K": 470,
+        "ratio": 48.4894,
+        "pvalue": 0.020464470085896358,
+        "padj": 0.04836203292890864
+      },
+      {
+        "id": "ko04022",
+        "term": "",
+        "ontology": "",
+        "name": "cGMP-PKG signaling pathway",
+        "k": 1,
+        "K": 513,
+        "ratio": 44.425,
+        "pvalue": 0.022320938274880908,
+        "padj": 0.04836203292890864
+      }
+    ],
+    "gene_count": 4
+  }
+}

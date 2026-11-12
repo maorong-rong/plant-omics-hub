@@ -1,0 +1,38 @@
+{
+  "capture": {
+    "url": "https://wheatomics.sdau.edu.cn/api/regulatory/gene/TraesCS1A02G013100",
+    "at": "2026-11-10T08:11:53.892680Z",
+    "status": 200,
+    "contentType": "application/json",
+    "originalBytes": 445,
+    "simulated": false,
+    "note": "真实抓取 2026-11-10；445 B；summary.hit_count=798 / motif_count=355 / min_pvalue=5.02e-10"
+  },
+  "payload": {
+    "gene": {
+      "gene_id": "TraesCS1A02G013100",
+      "chrom": "chr1A",
+      "start0": 7311699,
+      "end0": 7312269,
+      "strand": "+",
+      "transcript_id": "TraesCS1A02G013100.1",
+      "tss0": 7311699,
+      "tes0": 7312268
+    },
+    "region": {
+      "region_id": "TraesCS1A02G013100|upstream",
+      "gene_id": "TraesCS1A02G013100",
+      "kind": "upstream",
+      "chrom": "chr1A",
+      "start0": 7309699,
+      "end0": 7311699
+    },
+    "summary": {
+      "hit_count": 798,
+      "motif_count": 355,
+      "min_pvalue": 5.02e-10
+    },
+    "region_kind": "upstream",
+    "assembly": "IWGSC RefSeq v1.0"
+  }
+}
