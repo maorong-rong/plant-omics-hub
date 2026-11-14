@@ -26,7 +26,7 @@ import { describe, expect, it } from 'vitest';
 const FIXTURES = process.env.FIXTURES_ROOT ?? join(process.cwd(), 'src', 'sources');
 
 /**
- * 未留存原体的 fixture。按2026-11-01 定的三态写法，这一档的准确含义是
+ * 未留存原体的 fixture。按后端负责人 2026-11-01 定的三态写法，这一档的准确含义是
  * **「来源未核实，仅供解析回归」**——既不能声称为已实测，也不能断言是假。
  * 清空一项 = 该件已补 `rawBody`（补完它会落进 SELF_CONSISTENT_COUNT）。
  *
@@ -128,7 +128,7 @@ const SIMULATED: readonly string[] = [
 
 /**
  * **按"原体怎么来的"分类计数**——两类不是同一个证据等级，**不得相加成"有原体的件数"**
- * （2026-11-01：把"能自圆其说"记成"采集过"，是这类闸门最容易犯的错）。
+ * （后端负责人 2026-11-01：把"能自圆其说"记成"采集过"，是这类闸门最容易犯的错）。
  *
  *   CAPTURED_COUNT        真采集：rawBody 来自对上游的一次实际请求（rawBodySource: re-collected）
  *   RECONSTRUCTED_COUNT   重建：rawBody 由 payload 反向序列化得到（rawBodySource: reconstructed-from-payload）
@@ -160,15 +160,15 @@ interface Entry { rel: string; simulated: boolean; cropped: boolean; payloadRela
  * 2026-11-10 G4–G7 四出口补采 9 份 fixture（小麦共线 3 / PPI 2 / regulatory 1 / GO 1 / KEGG 1 / 水稻同源 1）：103 → 112；
  * 均无 rawBody（同源件为裁剪件），见 UNPROVEN。
  * 2026-11-10 第 11 源 InterPro 接线，补 1 份 PF00319 HMM 真采集件（rawBody 为解压后正文）：112 → 113；CAPTURED_COUNT 31 → 32。
- * 2026-11-10 封装层补齐 封装层补齐，补采 5 份真采集件（regulatory hits / go genes / kegg genes / genes resolve 03G / resolve 01G 空），
+ * 2026-11-10 issue #77 封装层补齐，补采 5 份真采集件（regulatory hits / go genes / kegg genes / genes resolve 03G / resolve 01G 空），
  * 都存了 rawBody + sourceSha256：113 → 118；CAPTURED_COUNT 32 → 37。
- * 2026-11-11 零值诊断 零值诊断，补采 3 份真采集件（01G 同源空 / 03G regulatory 404 / 03G GO 空）：
+ * 2026-11-11 issue #84 零值诊断，补采 3 份真采集件（01G 同源空 / 03G regulatory 404 / 03G GO 空）：
  * 118 → 121；CAPTURED_COUNT 37 → 40。
- * 2026-11-11 草莓空共线块与混合 geneOntology，补采 3 份真采集件（2x/8x 空块 / 2x 混合注释）：
+ * 2026-11-11 issue #93 草莓空共线块与混合 geneOntology，补采 3 份真采集件（2x/8x 空块 / 2x 混合注释）：
  * 121 → 124；CAPTURED_COUNT 40 → 43。
- * 2026-11-11 零值诊断 gramene ID 空间零值诊断，补采 2 份真采集件
+ * 2026-11-11 issue #94 / RC-04 gramene ID 空间零值诊断，补采 2 份真采集件
  * （3 个 MSU LOC_Os… 空数组原样 / 同一基因的 RAP-DB Os… 阳性对照裁剪 xrefs）：124 → 126；均无 rawBody，见 UNPROVEN。
- * 2026-11-11 STRING 输出上限可对账，补采 3 份真采集件
+ * 2026-11-11 issue #95（SB-10）STRING 输出上限可对账，补采 3 份真采集件
  * （草莓 2x / 8x 真跑同参数 limit=50 各一份 + 同一基因取全对照一份；带 rawBody + sourceSha256，计入 CAPTURED）：
  * 基线 126（含 #100 / #103 已合入件）→ 129；CAPTURED_COUNT 43 → 46。
  */
@@ -177,7 +177,7 @@ const FIXTURE_TOTAL = 129;
 /**
  * 扫描集合**按接线派生**：源 id 来自 `src/sources/index.ts` 的注册表，而不是"src/sources 下有哪些目录"。
  *
- * 为什么（2026-11-03 裁定）：未接线的源目录（如 R11 未过审的 uniprot）不是产品的一部分，
+ * 为什么（后端负责人 2026-11-03 裁定）：未接线的源目录（如 R11 未过审的 uniprot）不是产品的一部分，
  * 不构成任何工具，把它们算进"实测覆盖"只会让工作区天天红、让公开树必红。反过来，
  * 用手写白名单排除它们（PENDING_READERS 那种）又是个会过期的人工同步点——所以改成从接线派生。
  *
@@ -193,7 +193,7 @@ const REGISTERED_SOURCES: string[] = registry
 /**
  * 枚举**已接线源**的全部 fixture。
  *
- * **不做静默跳过**（2026-11-01 的规矩：校验函数里不许条件跳过）。
+ * **不做静默跳过**（后端负责人 2026-11-01 的规矩：校验函数里不许条件跳过）。
  * 某个已接线的源目录里 fixtures/ 消失或被改名，会被收进 SOURCES_WITHOUT_FIXTURES 并由断言要求为空；
  * 总份数另有 FIXTURE_TOTAL 钉着：少一份就红。
  */
@@ -338,7 +338,7 @@ describe('fixture 证据层级（原体 / 派生 / 合成）', () => {
   });
 
   it('声明了 sourceSha256 的件必须同时存 rawBody 且哈希相等（没有原体的哈希不算证据）', () => {
-    // 2026-11-01 维护者推广的全仓规则：`sourceSha256` 是对 `rawBody` 原始字节算的，
+    // 2026-11-01 后端负责人推广的全仓规则：`sourceSha256` 是对 `rawBody` 原始字节算的，
     // 不是对序列化后的 payload 算的。只记哈希不存原体 = 任何人都无法离线复算，
     // 等于「声明」而不是「证据」——这种件必须补 rawBody，或者删掉哈希降为「来源未核实」。
     const offenders = entries.filter((e) => e.sha && e.rawBody === undefined).map((e) => e.rel).sort();
@@ -361,7 +361,7 @@ describe('fixture 证据层级（原体 / 派生 / 合成）', () => {
     const simulated = entries.filter((e) => e.simulated).map((e) => e.rel).sort();
     expect(simulated).toEqual([...SIMULATED].sort());
     // 实测覆盖 = 有原体 且 非合成；合成件即使伪造了 rawBody 也要被排除
-    // 实测覆盖只取**真采集**：重建件不进这个数（2026-11-01 裁定）
+    // 实测覆盖只取**真采集**：重建件不进这个数（后端负责人 2026-11-01 裁定）
     const measured = entries.filter((e) => e.rawBodySource === 're-collected' && !e.simulated);
     expect(measured.length).toBe(CAPTURED_COUNT);
     for (const rel of SIMULATED) expect(measured.map((e) => e.rel)).not.toContain(rel);

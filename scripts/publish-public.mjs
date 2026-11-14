@@ -1,0 +1,840 @@
+#!/usr/bin/env node
+/**
+ * 对外公开仓的快照发布：从本地 `main` 导出白名单树 → 敏感审查 → 写 `PUBLISH.md` → 快照提交。
+ *
+ * 为什么需要它：GitHub 公开仓是手工导出的**独立历史**（与本地无共同祖先），所以每次同步都得覆盖式重建。
+ * 覆盖不可持续，也容易夹带内部文件。这里把发布变成一条连续的分支：
+ *   - 本地 `public` 分支 bootstrap 到 GitHub 现有 main（38d9aa6），此后每次都是**快进**；
+ *   - 白名单由 `git ls-tree HEAD` 决定，排除团队内部文件（`docs/协作分工.md`）；
+ *   - 敏感审查命中即**不提交**，先打清单；
+ *   - `PUBLISH.md` 写明对应本地 commit，公开仓可追溯。
+ *
+ * 用法：
+ *   node scripts/publish-public.mjs                 # dry-run（默认）：只报清单与扫描结论，不提交、不推送
+ *   node scripts/publish-public.mjs --apply         # 在本地 public 分支生成快照提交（不推送）
+ *   node scripts/publish-public.mjs --apply --push  # 生成并推送 public:main（需明确授权）
+ *   node scripts/publish-public.mjs --transport https ...  # 用 HTTPS 传输（默认 SSH）
+ *
+ * 退出码：敏感审查有阻断项、或导出树为空 → 1（不提交）。
+ */
+
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+/**
+ * 公开仓地址（默认 SSH 写法）。真正用哪种传输由 `--transport` / `PLANTOMICS_PUBLIC_TRANSPORT` 决定：
+ * 2026-11-02 实测本机到 github.com:22 时通时断（超时、Connection reset），而 443 与
+ * `credential.helper=manager` 正常，所以**不能把 SSH 写死**——否则发布卡在最后一步推送。
+ * 需要换目标时用 `PLANTOMICS_PUBLIC_REMOTE` 覆盖。
+ */
+const GITHUB = process.env.PLANTOMICS_PUBLIC_REMOTE ?? 'git@github.com:maorong-rong/plant-omics.git';
+
+/** 默认 bootstrap 点：GitHub 现有 main 的提交（2026-10-31 实测 38d9aa6）。 */
+const DEFAULT_BASE = '38d9aa6';
+
+/**
+ * 白名单排除项：**已被跟踪、但不许进公开仓**的内部文件。
+ *
+ * 注意分工：`.gitignore` 负责"根本别进跟踪集"（`记录/`、`.archify/`、`论文/`、`eval/`、
+ * `AGENTS.md`、`00_工作区总览.md`），本列表负责"已经跟踪、但导出时要剔除"的文件。
+ *
+ * `docs/任务看板.md` 属后者：里面有内部卡点、Bot 名称与人员分工，一旦被 commit
+ * 就会随 `git ls-tree HEAD` 进公开快照——所以这里与 `FORBIDDEN_PREFIXES` 双重兜底
+ * （2026-10-31 PUB-01）。
+ */
+export const EXCLUDED_PATHS = [
+  'docs/协作分工.md',
+  'docs/任务看板.md',
+  // 2026-11-03：这几份是内部协作文档。发布扫描拦不住「本涛点头」「代码改动者」这类内部称谓
+  // （它们不是 IP/token 那种敏感串），所以必须在白名单阶段整份排除，不能指望扫描兜底。
+  'docs/发布清单.md',
+  'docs/里程碑.md',
+  'docs/架构导读.md',
+  // `docs/架构解读.md` **不排除**：纯技术解释、0 处内部称谓，公开出去对使用者有用。
+  // 2026-11-14（0.2.2 上市）：公开仓是**插件分发**，不是论文与内部规划的镜像。
+  // 下面这些内部过程物料被 commit 后会被 `git ls-tree HEAD` 带进快照，必须逐个排除；
+  // 研究目录（analysis/、explore/、docs/paper/ 等）由 FORBIDDEN_PREFIXES 兜底。
+  'docs/agent-bot-check.md',
+  'docs/agent-host-note.md',
+  'docs/agent-pilot.md',
+  'docs/tool-coverage-2026-11-09.json',
+  'docs/可达性-2026-11-06.md',
+  'docs/可达性-工具级-2026-11-09.md',
+  'docs/工作环境-2026-11-06.md',
+  'docs/最近工作与预期计划-2026-11-08.md',
+  'docs/未接入源清单.md',
+  'docs/未来方向-wsl-2026-11-07.md',
+  'docs/架构对照-老图与当前架构-2026-11-09.md',
+  'docs/汇报-旧源价值与工程结构-2026-11-09.md',
+  'docs/版本路径-架构判定与0.1.x回退方案-2026-11-08.md',
+  'docs/现状-2026-11-07.md',
+];
+
+/**
+ * 基线里存在、本地没有、但**不能因快照而消失**的文件：整体替换式导出默认会删掉它们。
+ * 目前只有一条：npm 的 Trusted Publishing 流水线（公开仓直建，本地没有）。
+ * 删了它等于把 tag 触发的自动发布卸掉，属于看不见的破坏。
+ */
+const KEEP_FROM_BASE = ['.github/workflows/publish-npm.yml'];
+
+/**
+ * 基线里存在、本地版本**不能发**、但也不该从公开仓撤掉的整类目录。
+ *
+ * `deploy/`：本地版本含真实主机 IP（具体地址见该目录文件）与个人姓名，敏感审查会拦；
+ * 而公开仓里那份是更早的、**不含 IP 的旧版**。直接整目录排除会把已公开的部署文档删掉，
+ * 所以按基线原文保留，等部署方脱敏后再用本地版本覆盖（TODO 见 记录/20261102-对外发布前核对.md）。
+ * 注意：这段注释本身不能写出真实 IP——规则文本不能成为规则命中的对象（实测被自己拦过一次）。
+ */
+const KEEP_PREFIXES_FROM_BASE = ['deploy/'];
+
+/**
+ * 防御性排除：即使哪天被误加进跟踪集，也不许出现在公开树里。
+ *
+ * 与 `EXCLUDED_PATHS` 的区别：这里是**前缀**匹配（整类目录一律挡），
+ * `EXCLUDED_PATHS` 是**逐个精确路径**。两者都列 `docs/任务看板.md` 是有意的：
+ * 一处按路径、一处按前缀，删掉任何一处都还有另一处兜底（但有测试证明两处各自有效，
+ * 见 `test/publish-public.test.ts` 的负控）。
+ */
+const FORBIDDEN_PREFIXES = [
+  '记录/',
+  '.archify/',
+  '论文/',
+  'eval/',
+  'AGENTS.md',
+  '00_工作区总览.md',
+  '_归档/',
+  'docs/任务看板.md',
+  // 整类运维物料：内网拓扑、主机地址、证书/代理/备份操作手册、真名豁免清单。
+  // 公开读者要的是「能装上、能调」，不是我们的运维手册（2026-11-02 发布审查阻断 13 条后整目录排除）。
+  'deploy/',
+  // 2026-11-14（0.2.2 上市）：研究/过程物料不进公开插件仓。
+  // 论文仍在盲审、分析结果是未发表数据；公开仓只发插件与使用文档。
+  'analysis/',
+  'explore/',
+  'docs/paper/',
+  'docs/figures/',
+  'docs/competitive/',
+  'docs/architecture/',
+  'docs/capability/',
+  'docs/species/',
+  'web/screenshots/',
+  'site/screenshots/',
+];
+
+/**
+ * 明确要随快照发布的部署物料（`deploy/` 的**其余**文件仍整体排除）。
+ *
+ * 为什么不是放开整个 `deploy/`：目录里还有服务器现状、放宽项清单、运行时配置，
+ * 含真实主机地址与个人姓名。只让下面这些「不含真值」的文件走——脚本把域名、
+ * 本机 IP、期望数字一律从 `/etc/plantomics-hub/deploy.conf` 读，本体不带地址，
+ * 于是服务器上的部署脚本第一次有了 git 出处。
+ *
+ * 这些文件进快照走的是**本地版本**（不是基线旧版）。`README.md`、`nginx.conf` 于
+ * 2026-11-03 脱敏后加入：公开仓里的部署手册此前停在基线，缺 443 块与 `deploy.conf` 说明，
+ * 正是我们要治的"文档与事实不符"。公网 IP 由 `checkDeployNoPublicIp()` 在最终树上再核一遍。
+ */
+export const PUBLISH_DEPLOY_FILES = [
+  'deploy/update.sh',
+  'deploy/check.sh',
+  'deploy/enable-https.sh',
+  'deploy/backup.sh',
+  'deploy/daily-check.sh',
+  'deploy/plantomics-check.cron',
+  'deploy/deploy.conf.example',
+  'deploy/README.md',
+  'deploy/nginx.conf',
+];
+
+/**
+ * 无论如何都不许进快照的 deploy 文件，每项都写清理由（删证据=删理由，注释必须跟着走）：
+ *
+ * - `deploy/deploy.conf`：运行时真值（域名 + 公网 IP + 期望数字），只在服务器 `600 root:root`；
+ * - `deploy/waivers.conf`：放宽项清单含真实人名，命中 `personal-name` 规则，发出去必然 abort；
+ * - `deploy/服务器现状.md`：含公网 IP 与内网拓扑（Nginx/systemd/端口布局）。
+ *
+ * 这三条是**负控的锚点**：`test/publish-public.test.ts` 里有"清空本清单后必须放行"的反证，
+ * 证明拦截来自这里而不是别处硬编码。
+ */
+const DEPLOY_MUST_NOT_PUBLISH = [
+  { file: 'deploy/deploy.conf', why: '运行时真值（域名 / 公网 IP / 期望数字），只留在服务器' },
+  { file: 'deploy/waivers.conf', why: '含真实人名，命中 personal-name' },
+  { file: 'deploy/服务器现状.md', why: '含公网 IP 与内网拓扑' },
+];
+
+/**
+ * 快照里 `deploy/` 的**双向**断言：该有的在、不该有的不在。
+ * 只靠 `internal-host` 规则兜底是不够的——那是"误放开就整次发布失败"，不是"知道有没有纳入"。
+ *
+ * @param {string[]} deployPaths 快照树里 `deploy/` 下的全部路径
+ * @returns {string[]} 问题列表（空数组 = 通过）
+ */
+export function checkDeploySnapshot(deployPaths) {
+  const present = new Set(deployPaths);
+  const problems = [];
+  for (const file of PUBLISH_DEPLOY_FILES) {
+    if (!present.has(file)) {
+      problems.push(`快照 deploy/ 缺少 ${file}：服务器上这份脚本将没有 git 出处`);
+    }
+  }
+  for (const { file, why } of DEPLOY_MUST_NOT_PUBLISH) {
+    if (present.has(file)) {
+      problems.push(`快照 deploy/ 出现了 ${file}（${why}）：必须排除`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * 快照里 `deploy/` 的文档与配置**不许含本机网段地址**（2026-11-03 裁定）。
+ *
+ * 为什么单列一条：`deploy/README.md` 与 `deploy/nginx.conf` 是给外部读者看的部署手册与镜像配置，
+ * 写进公网地址等于把内网拓扑公开；脱敏后又很容易在"下次顺手同步"时被改回来，所以按**内容**核，
+ * 不靠人记得。只查 `.md` / `.conf` / `.example`（脚本本体交给 `internal-host` 规则与脱敏约定）。
+ *
+ * 为什么不用通用的"任意 IPv4"：`127.0.0.1`、`0.0.0.0` 在部署文档里是正常内容，拦它们等于天天误报。
+ * 只盯我们自有的那个网段；规则文本本身不能构成命中，故用 `\d` 拼出，不写字面量。
+ */
+export function checkDeployNoPublicIp(entries) {
+  const ownNetwork = /\b182\.92\.\d{1,3}\.\d{1,3}\b/;
+  const problems = [];
+  for (const { file, text } of entries) {
+    if (!/\.(md|conf|example)$/.test(file)) continue;
+    const match = ownNetwork.exec(text);
+    if (match) {
+      problems.push(`快照 ${file} 含自有网段地址「${match[0]}」：先脱敏（真值留服务器配置，不写进仓库）`);
+    }
+  }
+  return problems;
+}
+
+/** 指向未发布文件的相对链接：**默认**降级为纯文本；`--keep-internal-links` 才保真导出。 */
+const INTERNAL_LINK = /\[([^\]]+)\]\((?:\.\.\/)*(?:记录\/|\.archify\/|论文\/|AGENTS\.md|00_工作区总览\.md|docs\/协作分工\.md|docs\/任务看板\.md|deploy\/|analysis\/|explore\/|docs\/paper\/|docs\/figures\/|docs\/competitive\/|docs\/architecture\/|docs\/capability\/|docs\/species\/|web\/screenshots\/|site\/screenshots\/)[^)]*\)/g;
+export const STRIPPED_LINK_NOTE = '（私有仓记录，未公开）';
+
+const BINARY_EXTS = new Set([
+  '.png', '.jpg', '.jpeg', '.webp', '.gif', '.ico', '.pdf', '.zip', '.tgz', '.gz', '.woff', '.woff2', '.ttf',
+]);
+
+/**
+ * 敏感审查规则。分两类：
+ *   block —— 命中即不许提交（疑似真凭据、个人路径、内部主机、失效的内部链接）；
+ *   allow —— 明确的占位写法，放行但不沉默：报告里列出来，让人看见"这里有个占位符"。
+ *
+ * 为什么必须区分占位符：README 里到处是 `PLANTOMICS_HUB_TOKEN=<token>`、`<安装目录>`。
+ * 一律拦的话每天误报，人就会把闸关掉——那比没有闸更糟。
+ */
+const PLACEHOLDER = /<(?:token|你的\s*token|你|name|repo|安装目录|脚本完整路径|至少16字符的随机串|…)[^>]*>|CHANGE_ME|至少16字符|…|your[-_]token|example\.(?:com|org|invalid)/i;
+
+const RULES = [
+  {
+    id: 'private-key',
+    block: /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+    why: '私钥',
+  },
+  {
+    id: 'github-token',
+    block: /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
+    why: 'GitHub token',
+  },
+  {
+    id: 'openai-token',
+    block: /\bsk-[A-Za-z0-9]{20,}\b/,
+    why: 'OpenAI 风格密钥',
+  },
+  {
+    id: 'aws-key',
+    block: /\bAKIA[0-9A-Z]{16}\b/,
+    why: 'AWS access key',
+  },
+  {
+    id: 'slack-token',
+    block: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/,
+    why: 'Slack token',
+  },
+  {
+    id: 'bearer-real',
+    block: /\bBearer\s+([A-Za-z0-9._\-]{24,})\b/,
+    why: 'Bearer 后面跟着像真的长串',
+  },
+  {
+    id: 'windows-user-path',
+    block: /[A-Za-z]:\\Users\\(?!<)[^\\\s"'`)]+/,
+    why: '个人绝对路径',
+  },
+  {
+    id: 'personal-name',
+    // 名字拆成字符拼接：规则文本本身不能命中规则（否则每次导出都拦自己），也不方便被搜到
+    block: new RegExp(['余', '本', '涛'].join('')),
+    why: '个人姓名',
+  },
+  {
+    id: 'internal-host',
+    block: /\b(?:182\.92\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b/,
+    why: '内部/自有主机地址',
+  },
+  {
+    id: 'dangling-internal-link',
+    block: /\]\((?:\.\/)?(?:\.\.\/)*(?:记录\/|\.archify\/|论文\/|AGENTS\.md|00_工作区总览\.md|docs\/协作分工\.md|deploy\/|analysis\/|explore\/|docs\/paper\/|docs\/figures\/|docs\/competitive\/|docs\/architecture\/|docs\/capability\/|docs\/species\/|web\/screenshots\/|site\/screenshots\/)/,
+    why: '指向未发布文件的链接（公开仓会 404）',
+  },
+];
+
+function git(args, options = {}) {
+  return execFileSync('git', args, {
+    cwd: ROOT,
+    encoding: options.encoding ?? 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    // 默认吞掉 stderr：探测性调用（如 rev-parse 一个还不存在的分支）不该把 fatal 打到屏幕
+    stdio: options.stdio ?? ['ignore', 'pipe', 'pipe'],
+    ...options,
+  });
+}
+
+function gitBuffer(args) {
+  return execFileSync('git', args, { cwd: ROOT, maxBuffer: 128 * 1024 * 1024 });
+}
+
+/** 取当前 HEAD 的全部跟踪文件路径（-z 避免中文路径被转义）。 */
+export function trackedPaths() {
+  const raw = git(['ls-tree', '-r', '-z', '--name-only', 'HEAD']);
+  return raw.split('\0').filter(Boolean);
+}
+
+/** 白名单 = 跟踪文件 − 排除项；再兜一层防御性前缀。`PUBLISH_DEPLOY_FILES` 是唯一的破例口子。 */
+export function whitelist(allPaths) {
+  const excluded = new Set(EXCLUDED_PATHS);
+  const deployAllowed = new Set(PUBLISH_DEPLOY_FILES);
+  const kept = [];
+  const skipped = [];
+  for (const file of allPaths) {
+    // 例外先判：这三个脚本要公开，且必须是**本地版本**（不是基线旧版），否则等于没纳入。
+    if (deployAllowed.has(file)) {
+      kept.push(file);
+      continue;
+    }
+    if (excluded.has(file) || FORBIDDEN_PREFIXES.some((prefix) => file === prefix || file.startsWith(prefix))) {
+      skipped.push(file);
+      continue;
+    }
+    kept.push(file);
+  }
+  return { kept, skipped };
+}
+
+function blobAt(rev, file) {
+  return gitBuffer(['cat-file', 'blob', `${rev}:${file}`]);
+}
+
+function looksBinary(file, buffer) {
+  if (BINARY_EXTS.has(path.extname(file).toLowerCase())) return true;
+  return buffer.includes(0);
+}
+
+/**
+ * 敏感审查：返回 { blocks, allowed }。
+ * 只扫文本文件；二进制跳过但记一条说明。
+ */
+export function scanSensitive(files, readBlob) {
+  const blocks = [];
+  const allowed = [];
+  const binarySkipped = [];
+  for (const file of files) {
+    const buffer = readBlob(file);
+    if (looksBinary(file, buffer)) {
+      binarySkipped.push(file);
+      continue;
+    }
+    const text = buffer.toString('utf8');
+    const lines = text.split('\n');
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      const placeholderLine = PLACEHOLDER.test(line)
+        && /(TOKEN|SECRET|PASSWORD|API[_-]?KEY|C:\\Users|&lt;|PLANTOMICS_HUB_)/i.test(line);
+      for (const rule of RULES) {
+        const match = rule.block.exec(line);
+        if (!match) continue;
+        const hit = {
+          file,
+          line: index + 1,
+          rule: rule.id,
+          why: rule.why,
+          match: match[0].slice(0, 160),
+          excerpt: line.trim().slice(0, 120),
+        };
+        if (placeholderLine && (rule.id === 'bearer-real' || rule.id === 'windows-user-path' || rule.id === 'personal-name')) {
+          allowed.push({ ...hit, note: '占位符' });
+          continue;
+        }
+        blocks.push(hit);
+      }
+      // 让报告能显示"这里有占位符"：不算命中，但要可见（否则读者以为扫描没看这些行）
+      if (placeholderLine && allowed.length < 60 && !allowed.some((item) => item.file === file && item.line === index + 1)) {
+        allowed.push({
+          file,
+          line: index + 1,
+          rule: 'known-placeholder',
+          why: '已知占位写法，放行',
+          match: line.trim().slice(0, 120),
+          excerpt: line.trim().slice(0, 120),
+        });
+      }
+    }
+  }
+  return { blocks, allowed, binarySkipped };
+}
+
+/**
+ * 生成 PUBLISH.md：公开仓能追溯到本地哪次提交、由什么导出、哪些内部链接被降级，
+ * 以及本次相对基线**哪些路径消失或换了位置**（旧快照里有、新快照里没有，容易被当成误删）。
+ */
+export function renderPublishMd({ localSha, localSubject, date, fileCount, baseSha, strippedLinks = [], removals = [] }) {
+  const lines = [
+    '# 发布快照说明',
+    '',
+    '本仓由**私有开发仓导出**，不是手工维护的第二份源码。每次发布是把本地白名单树整体写成一次快照提交，',
+    '因此历史是连续快进的一条线，不做逐提交移植。',
+    '',
+    '| 项 | 值 |',
+    '|---|---|',
+    `| 对应本地提交 | \`${localSha}\` — ${localSubject} |`,
+    `| 导出时间 | ${date} |`,
+    `| 文件数 | ${fileCount} |`,
+    `| 快照基线 | \`${baseSha}\`（首个快照之后的提交都在此之上快进） |`,
+    '',
+    '## 导出范围',
+    '',
+    '- 包含：源码（`src/`）、测试（`test/`）、脚本（`scripts/`）、文档（`README.md`、`CHANGELOG.md`、`CITATION.cff`、',
+    '  `docs/` 的公开部分）、评测判分器与说明（`eval-public/`，只含判分逻辑与示例，不含题面与期望值）、',
+    '  两个出口配置、市场素材（`market/`）、站点与 Web 应用（`site/`、`web/`）。',
+    '- 不含：团队内部分工（`docs/协作分工.md`）、内部任务看板（`docs/任务看板.md`，含内部卡点与 Bot 分工）、',
+    '  过程记录（`记录/`）、论文与评测私有产物（`论文/`、`eval/` 的题面与期望值）、',
+    '  `.archify/`、内部规则文件与工作区总览、运维物料（`deploy/`：内网拓扑、主机地址与部署手册）。',
+    '- 2026-11-14 起另不含：未发表研究与论文物料（`analysis/`、`explore/`、`docs/paper/`、`docs/figures/`、',
+    '  `docs/competitive/`、`docs/architecture/`、`docs/capability/`、`docs/species/`）、内部截图（`web/screenshots/`、`site/screenshots/`）',
+    '  与过程规划文档；公开仓是插件分发，不是研究记录镜像。',
+    '',
+  ];
+
+  if (removals.length > 0) {
+    lines.push(
+      '## 本次相对基线移除 / 迁移的路径',
+      '',
+      '这些路径在上一次快照里还有、这次快照里没有了（或换了位置）——**是有意为之，不是误删**。',
+      '找文件先看这张表：迁移过的在新路径，下线的已从公开树移除。',
+      '',
+      '| 处理 | 原路径 | 现路径 |',
+      '|---|---|---|',
+    );
+    for (const item of removals) {
+      const from = item.from.replace(/\|/g, '\\|');
+      const to = item.kind === 'moved' ? `\`${item.to.replace(/\|/g, '\\|')}\`` : '—';
+      lines.push(`| ${item.kind === 'moved' ? '迁移' : '下线'} | \`${from}\` | ${to} |`);
+    }
+    lines.push('');
+  }
+
+  if (strippedLinks.length > 0) {
+    lines.push(
+      '## 本次导出对内部链接的降级',
+      '',
+      `公开仓不含私有仓的 \`记录/\`。本次导出把 ${strippedLinks.length} 处指向它的相对链接降级为纯文本`,
+      `「${STRIPPED_LINK_NOTE}」，因此下列段落的措辞与私有仓不同（其余内容一致）：`,
+      '',
+      '| 文件 | 行 | 原链接 |',
+      '|---|---|---|',
+    );
+    for (const link of strippedLinks) {
+      const from = link.from.replace(/\|/g, '\\|');
+      lines.push(`| \`${link.file}\` | ${link.line} | \`${from}\` |`);
+    }
+    lines.push('');
+  }
+
+  lines.push(
+    '## 注意',
+    '',
+    '- 本仓的提交历史与私有仓**没有共同祖先**；比对内容请以时间点对应的快照提交为准，不要指望 `git log` 互通。',
+    '- 发布前会跑敏感审查（私钥、token、个人路径、内部主机、失效内部链接）；命中即不导出。',
+    '',
+  );
+  return lines.join('\n');
+}
+
+/* ------------------------------------------------------------------ *
+ * CLI
+ * ------------------------------------------------------------------ */
+
+export function parseArgs(argv) {
+  const flags = new Set(argv.slice(2));
+  const baseIndex = argv.indexOf('--base');
+  const transportIndex = argv.indexOf('--transport');
+  return {
+    apply: flags.has('--apply'),
+    push: flags.has('--push'),
+    /**
+     * 内部链接降级（把指向 `记录/`、`deploy/` 等未发布文件的链接换成纯文本）**默认开启**。
+     *
+     * 2026-11-03 裁定：这些悬空链接在默认路径上会产出 11 条 `dangling-internal-link` 阻断，
+     * 于是"发布必须先想起加一个开关"——迟早有人忘，然后误以为发布坏了。
+     * 默认可用是硬要求；逃生口是 `--keep-internal-links`（保真导出，用于调试规则本身）。
+     * `--strip-internal-links` 仍被接受，视为已默认行为的空操作（旧命令不报错）。
+     */
+    stripLinks: !flags.has('--keep-internal-links'),
+    base: baseIndex > 0 ? argv[baseIndex + 1] : undefined,
+    // 传输方式：ssh（默认）或 https。2026-11-02 实测本机到 github.com:22 时通时断，
+    // 而 443 与 credential.helper=manager 正常——写死 SSH 会在推的那一步才炸，所以做成可切。
+    transport: transportIndex > 0 ? argv[transportIndex + 1] : (process.env.PLANTOMICS_PUBLIC_TRANSPORT ?? 'ssh'),
+    json: flags.has('--json'),
+  };
+}
+
+/**
+ * 把远端地址换算成指定传输方式。
+ *   scp 形式   git@github.com:owner/repo.git  → https://github.com/owner/repo.git
+ *   ssh URL    ssh://git@host/owner/repo.git  → https://host/owner/repo.git
+ * 已经是 https 的原样返回。**只换传输，不换主机与仓库路径**——目标仍是同一个公开仓。
+ */
+export function resolveRemote(remote, transport = 'ssh') {
+  if (transport !== 'https') return remote;
+  const scp = /^git@([^:]+):(.+)$/.exec(remote);
+  if (scp) return `https://${scp[1]}/${scp[2]}`;
+  const sshUrl = /^ssh:\/\/git@([^/]+)\/(.+)$/.exec(remote);
+  if (sshUrl) return `https://${sshUrl[1]}/${sshUrl[2]}`;
+  return remote;
+}
+
+/**
+ * 基线从哪来的：显式 `--base` / 本地 `public` 分支 / 默认 bootstrap 点。
+ *
+ * 返回来源而不是只返回 SHA：原来那句「本地无 public 分支，取默认 bootstrap 点」
+ * 是无条件打印的，`refs/heads/public` 明明存在也照样这么说，会误导后来的人
+ * （2026-11-03 后端负责人指出）。基线值本身没错，错的是这句话。
+ */
+function resolveBase(explicit) {
+  if (explicit) return { sha: git(['rev-parse', explicit]).trim(), source: 'explicit' };
+  try {
+    return { sha: git(['rev-parse', 'refs/heads/public']).trim(), source: 'public-branch' };
+  } catch {
+    return { sha: git(['rev-parse', `${DEFAULT_BASE}^{commit}`]).trim(), source: 'default-bootstrap' };
+  }
+}
+
+async function main() {
+  const args = parseArgs(process.argv);
+  if (!['ssh', 'https'].includes(args.transport)) {
+    process.stderr.write(`❌ 未知传输方式 ${JSON.stringify(args.transport)}：只支持 ssh / https\n`);
+    process.exitCode = 1;
+    return;
+  }
+  const remote = resolveRemote(GITHUB, args.transport);
+  const localSha = git(['rev-parse', 'HEAD']).trim();
+  const localSubject = git(['log', '-1', '--format=%s']).trim();
+  const base = resolveBase(args.base);
+  const baseSha = git(['rev-parse', base.sha]).trim();
+
+  // 公开仓当前 tip（只读，确认 bootstrap 点没漂）
+  let remoteTip = null;
+  try {
+    const raw = git(['ls-remote', remote, 'refs/heads/main']);
+    remoteTip = raw.trim().split(/\s+/)[0] ?? null;
+  } catch (error) {
+    process.stderr.write(`⚠️ 读不到远端 ${remote}（transport=${args.transport}）：${error instanceof Error ? error.message : String(error)}\n`);
+  }
+
+  const all = trackedPaths();
+  const { kept, skipped } = whitelist(all);
+  if (kept.length === 0) {
+    process.stderr.write('❌ 白名单为空，拒绝导出\n');
+    process.exitCode = 1;
+    return;
+  }
+
+  const date = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+
+  // 用临时 index 造树：不动工作区、不动真实索引。
+  const tempDir = mkdtempSync(path.join(tmpdir(), 'publish-public-'));
+  const indexFile = path.join(tempDir, 'index');
+  const env = { ...process.env, GIT_INDEX_FILE: indexFile };
+  try {
+    git(['read-tree', 'HEAD'], { env });
+    for (const file of skipped) git(['update-index', '--force-remove', '--', file], { env });
+
+    // ① 导出时把指向未发布文件的链接降级为纯文本（可选；不改本地文件，只改导出树）。
+    //    逐行替换并记下行号与原文：审查的人要能一条条核，不能只看到一个数字。
+    const strippedLinks = [];
+    const exportedText = new Map();
+    for (const file of kept) {
+      const buffer = blobAt('HEAD', file);
+      if (looksBinary(file, buffer)) continue;
+      let text = buffer.toString('utf8');
+      if (args.stripLinks && text.includes('](')) {
+        const lines = text.split('\n');
+        let changed = false;
+        const nextLines = lines.map((line, index) => {
+          if (!line.includes('](')) return line;
+          return line.replace(INTERNAL_LINK, (whole, label) => {
+            const to = `${label}${STRIPPED_LINK_NOTE}`;
+            strippedLinks.push({ file, line: index + 1, from: whole, to });
+            changed = true;
+            return to;
+          });
+        });
+        if (changed) {
+          text = nextLines.join('\n');
+          const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], {
+            cwd: ROOT, input: text, encoding: 'utf8',
+          }).trim();
+          git(['update-index', '--add', '--cacheinfo', `100644,${blob},${file}`], { env });
+        }
+      }
+      exportedText.set(file, text);
+    }
+
+    // ② 基线里存在、本地没有、但不许被快照删掉的文件：
+    //    - 精确路径（npm 发布流水线）；
+    //    - 整类目录（deploy/）：本地版本含真实主机 IP 与姓名，不能发；但公开仓里那份是**不含 IP 的旧版**，
+    //      直接删掉等于把已经公开的部署文档撤下来。所以按基线原文保留，等脱敏后再用本地版本覆盖。
+    const carriedOver = [];
+    const carryOne = (file) => {
+      let entry;
+      try {
+        entry = git(['ls-tree', baseSha, '--', file]).trim();
+      } catch {
+        return;
+      }
+      if (!entry) return;
+      const [meta, ...rest] = entry.split('\t');
+      const [, type, sha] = (meta ?? '').split(/\s+/);
+      if (type !== 'blob' || !sha) return;
+      const target = rest.join('\t') || file;
+      git(['update-index', '--add', '--cacheinfo', `100644,${sha},${target}`], { env });
+      carriedOver.push(target);
+      exportedText.set(target, blobAt(baseSha, target).toString('utf8'));
+    };
+    for (const file of KEEP_FROM_BASE) {
+      if (!kept.includes(file)) carryOne(file);
+    }
+    for (const prefix of KEEP_PREFIXES_FROM_BASE) {
+      const basePaths = git(['ls-tree', '-r', '-z', '--name-only', baseSha, '--', prefix])
+        .split('\0')
+        .filter(Boolean);
+      for (const file of basePaths) {
+        if (!kept.includes(file)) carryOne(file);
+      }
+    }
+
+    // ① 先放一个**占位** PUBLISH.md：只为让树的形状与最终一致（它的存在与否会改变 diff，
+    //    内容不会）。真正的 PUBLISH.md 要等算出本次"移除 / 迁移"清单之后才能写。
+    const hashBlob = (text) => execFileSync('git', ['hash-object', '-w', '--stdin'], {
+      cwd: ROOT, input: text, encoding: 'utf8',
+    }).trim();
+    git(['update-index', '--add', '--cacheinfo', `100644,${hashBlob('PUBLISH.md placeholder\n')},PUBLISH.md`], { env });
+    const treePreview = git(['write-tree'], { env }).trim();
+
+    // 审查对**导出后**的内容做：拦的是真正会公开的文本。
+    const scan = scanSensitive(kept, (file) => {
+      const text = exportedText.get(file);
+      return text === undefined ? blobAt('HEAD', file) : Buffer.from(text, 'utf8');
+    });
+
+    const baseTree = git(['rev-parse', `${baseSha}^{tree}`]).trim();
+    // -z：不转义非 ASCII 路径；-M：识别重命名，否则"迁移"会被当成"删除"记账。
+    // name-status 的字段序列是 STATUS\0path\0，R/C 多一个目标路径字段。
+    const rawDiff = git(['diff-tree', '-r', '-z', '-M', '--name-status', baseTree, treePreview]);
+    const fields = rawDiff.split('\0').filter((field) => field !== '');
+    const changes = [];
+    for (let index = 0; index < fields.length;) {
+      const status = fields[index++];
+      const file = fields[index++];
+      if (!status || !file) break;
+      if (status[0] === 'R' || status[0] === 'C') {
+        const to = fields[index++];
+        changes.push({ status: status[0], file: to ?? file, from: file });
+      } else {
+        changes.push({ status: status[0] ?? '?', file });
+      }
+    }
+    const summary = { A: 0, M: 0, D: 0, R: 0, T: 0 };
+    for (const change of changes) summary[change.status] = (summary[change.status] ?? 0) + 1;
+
+    const byTopDir = new Map();
+    for (const change of changes) {
+      const top = change.file.includes('/') ? change.file.split('/')[0] : '(root)';
+      byTopDir.set(top, (byTopDir.get(top) ?? 0) + 1);
+    }
+
+    // 公开读者会看到这些文件消失：迁移与下线都写进 PUBLISH.md，免得被当成误删。
+    const removals = changes
+      .filter((change) => change.status === 'D' || change.status === 'R')
+      .map((change) => ({ kind: change.status === 'D' ? 'deleted' : 'moved', from: change.from ?? change.file, to: change.file }));
+
+    // ② 真正写 PUBLISH.md（此时已知 removals），再用最终树做快照。
+    const publishMd = renderPublishMd({
+      localSha, localSubject, date, fileCount: kept.length + 1, baseSha, strippedLinks, removals,
+    });
+    git(['update-index', '--add', '--cacheinfo', `100644,${hashBlob(publishMd)},PUBLISH.md`], { env });
+    const tree = git(['write-tree'], { env }).trim();
+
+    // deploy/ 双向断言：拿**最终树**核，不看 kept 列表——kept 只说明"想发什么"，
+    // 树才说明"实际会发什么"（基线保留、链接降级都可能改变结果）。
+    const deploySnapshot = git(['ls-tree', '-r', '-z', '--name-only', tree, '--', 'deploy/'])
+      .split('\0')
+      .filter(Boolean);
+    // 内容检查也要在**最终树**上做：文件在不在是一件事，里面有没有地址是另一件事。
+    const deployEntries = deploySnapshot.map((file) => ({
+      file,
+      text: git(['cat-file', '-p', `${tree}:${file}`]),
+    }));
+    const deployProblems = [
+      ...checkDeploySnapshot(deploySnapshot),
+      ...checkDeployNoPublicIp(deployEntries),
+    ];
+    if (deployProblems.length > 0) {
+      process.stderr.write('❌ 快照 deploy/ 断言未通过：\n');
+      for (const problem of deployProblems) process.stderr.write(`  - ${problem}\n`);
+      process.exitCode = 1;
+      return;
+    }
+
+    const report = {
+      localSha,
+      localSubject,
+      baseSha,
+      remoteTip,
+      transport: args.transport,
+      remote,
+      whitelist: kept.length,
+      excluded: skipped,
+      changes: summary,
+      deletions: changes.filter((change) => change.status === 'D').map((change) => change.file),
+      additions: changes.filter((change) => change.status === 'A').map((change) => change.file),
+      modifications: changes.filter((change) => change.status === 'M').map((change) => change.file),
+      sensitive: { blocks: scan.blocks, allowed: scan.allowed, binarySkippedCount: scan.binarySkipped.length },
+      strippedLinks,
+      carriedOver,
+      deploySnapshot,
+      tree,
+      applyReady: scan.blocks.length === 0,
+    };
+
+    const reportPath = path.join(ROOT, '.git', 'publish-dryrun.json');
+    writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+
+    if (args.json) {
+      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    } else {
+      const lines = [
+        '发布快照 dry-run',
+        `  本地 HEAD      ${localSha} — ${localSubject}`,
+        `  快照基线       ${baseSha}${
+          base.source === 'public-branch' ? '（本地 public 分支）'
+            : base.source === 'default-bootstrap' ? '（本地无 public 分支，取默认 bootstrap 点）'
+              : '（--base 指定）'}`,
+        `  GitHub main    ${remoteTip ?? '读不到'}`,
+        `  推送传输       ${args.transport} → ${remote}`,
+        `  白名单文件     ${kept.length}（排除 ${skipped.length}: ${skipped.join(', ') || '无'}）`,
+        `  相对基线       +${summary.A ?? 0} 新 / ~${summary.M ?? 0} 改 / -${summary.D ?? 0} 删`,
+        '',
+        '  按顶层目录：',
+        ...[...byTopDir.entries()].sort((a, b) => b[1] - a[1]).map(([dir, count]) => `    ${dir.padEnd(12)} ${count}`),
+        '',
+        `  敏感审查：阻断 ${scan.blocks.length} 条，占位放行 ${scan.allowed.length} 条，二进制跳过 ${scan.binarySkipped.length} 个`,
+        `  基线保留：${carriedOver.length > 0 ? carriedOver.join(', ') : '无'}`,
+        `  快照 deploy/（${deploySnapshot.length}）：${deploySnapshot.join(', ') || '无'}`,
+        `  内部链接降级：${strippedLinks.length} 处${args.stripLinks ? '（默认行为）' : '（--keep-internal-links：保真导出）'}`,
+      ];
+      if (strippedLinks.length > 0) {
+        lines.push('  降级链接（逐条）：');
+        for (const link of strippedLinks) {
+          lines.push(`    ${link.file}:${link.line}`);
+          lines.push(`      原：${link.from}`);
+          lines.push(`      改：${link.to}`);
+        }
+      }
+      if (scan.blocks.length > 0) {
+        lines.push('  阻断项：');
+        for (const hit of scan.blocks.slice(0, 40)) {
+          lines.push(`    ${hit.file}:${hit.line} [${hit.rule}] ${hit.why} :: ${hit.excerpt}`);
+        }
+        if (scan.blocks.length > 40) lines.push(`    …还有 ${scan.blocks.length - 40} 条，见报告文件`);
+      }
+      for (const hit of scan.allowed.slice(0, 10)) {
+        lines.push(`  占位放行 ${hit.file}:${hit.line} [${hit.rule}] ${hit.excerpt}`);
+      }
+      lines.push('', `  完整报告：${path.relative(ROOT, reportPath)}`);
+      process.stdout.write(`${lines.join('\n')}\n`);
+    }
+
+    if (scan.blocks.length > 0) {
+      process.stderr.write('❌ 敏感审查有阻断项：不提交、不推送\n');
+      process.exitCode = 1;
+      return;
+    }
+
+    if (!args.apply) {
+      process.stdout.write('（dry-run：未创建提交、未推送）\n');
+      return;
+    }
+
+    // --apply：在 public 分支上生成快照提交（当前 HEAD 的父提交之外，基线为 base）。
+    const message = [
+      `chore(public): snapshot from ${localSha.slice(0, 7)}`,
+      '',
+      `对应私有仓提交：${localSha} — ${localSubject}`,
+      `导出范围：白名单 ${kept.length} 个文件（排除 ${skipped.length} 个内部文件）`,
+      `敏感审查：阻断 0 条（占位放行 ${scan.allowed.length} 条）`,
+    ].join('\n');
+    const commit = git(['commit-tree', tree, '-p', baseSha, '-m', message]).trim();
+    git(['update-ref', 'refs/heads/public', commit]);
+    process.stdout.write(`✅ 已生成快照提交 ${commit}（public 分支，基线 ${baseSha}）\n`);
+
+    if (args.push) {
+      // 推送前**重新读**远端：不许拿本次启动时的旧结果当基线（网络抖动会让人误以为没动）。
+      const currentMain = git(['ls-remote', remote, 'refs/heads/main']).trim().split(/\s+/)[0] ?? null;
+      if (currentMain !== baseSha) {
+        process.stderr.write(
+          `❌ 远端 main 已变动：期望基线 ${baseSha}，实读 ${currentMain ?? '读不到'}。停止，不覆盖。\n`,
+        );
+        process.exitCode = 1;
+        return;
+      }
+      process.stdout.write(`  远端 main 复核：${currentMain}（与基线一致）\n`);
+
+      // 体积：只量这次要传的对象。**不能用 `git bundle … --not <base>`**——
+      // 快照的父提交就是基线时，它会判定"空 bundle"直接报错（实测踩到）。
+      // 改用 rev-list 列出不可达对象、逐个取大小求和；这是未压缩上界，比实际 pack 更保守。
+      const objects = git(['rev-list', '--objects', commit, '--not', baseSha]).split('\n').filter(Boolean);
+      let bytes = 0;
+      for (const entry of objects) {
+        const sha = entry.split(' ')[0];
+        if (sha) bytes += Number(git(['cat-file', '-s', sha]).trim());
+      }
+      process.stdout.write(`  待传对象 ${objects.length} 个 / 未压缩 ${bytes} B（门槛 10 MiB）\n`);
+      if (bytes >= 10 * 1024 * 1024) {
+        process.stderr.write('❌ 待传对象 ≥ 10 MiB：停下报告，不推。\n');
+        process.exitCode = 1;
+        return;
+      }
+
+      git(['push', remote, 'refs/heads/public:refs/heads/main'], { stdio: 'inherit' });
+      const verify = git(['ls-remote', remote, 'refs/heads/main']).trim().split(/\s+/)[0];
+      process.stdout.write(`  远端 main = ${verify}${verify === commit ? '（与本地快照一致）' : '（不一致，停止）'}\n`);
+      if (verify !== commit) process.exitCode = 1;
+    } else {
+      process.stdout.write('（未推送：加 --push 才推）\n');
+    }
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    process.stderr.write(`❌ ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}

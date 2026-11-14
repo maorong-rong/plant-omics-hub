@@ -65,13 +65,13 @@ function silentIo() {
 
 describe('hub_status 默认集读数解析', () => {
   it('解析「已超软建议」与「在软建议内」两种措辞', () => {
-    expect(extractHubStatusDefaultSetTools('默认推荐集：41 个工具，已超软建议 40 共 1 个（只警示、不拒绝）')).toBe(41);
-    expect(extractHubStatusDefaultSetTools('默认推荐集：35 个工具，软建议 ≤ 40（超出只警示、不拒绝）')).toBe(35);
+    expect(extractHubStatusDefaultSetTools('默认下发：41 个工具，已超软建议 40 共 1 个（只警示、不拒绝）')).toBe(41);
+    expect(extractHubStatusDefaultSetTools('默认下发：35 个工具，软建议 ≤ 40（超出只警示、不拒绝）')).toBe(35);
   });
 
   it('找不到读数就抛错，不猜数字', () => {
     expect(() => extractHubStatusDefaultSetTools('规模（全库，不设上限）：源 10；工具 39＋元工具 2＝41')).toThrow(
-      /找不到「默认推荐集：N 个工具」/,
+      /找不到「默认下发：N 个工具」/,
     );
   });
 });
@@ -191,11 +191,11 @@ describe('报告正文', () => {
     expect(text).toContain('tools/list');
   });
 
-  it('不一致时正文标红，并说明只报红不自动改数', () => {
+  it('不一致时正文标红，且点明这是 P1/P2b 的工单', () => {
     const text = renderStatusReport(snapshot);
     expect(text).toContain('**一致性检查：❌ 不一致**');
-    expect(text).toContain('`npm run status:check` 会 exit 1');
-    expect(text).toContain('只报红');
+    expect(text).toContain('`npm run status:check` 在此检出上 exit 1');
+    expect(text).toContain('P1/P2b');
   });
 
   it('一致时正文标绿，且三通道不一致只记录不闸', () => {

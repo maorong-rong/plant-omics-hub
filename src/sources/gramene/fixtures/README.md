@@ -5,7 +5,7 @@ API base：`https://data.gramene.org/v69`；文档 `https://data.gramene.org/v69
 
 结构快照 `genes-structure*.json` 于 2026-11-10 补采（同一 API base、直连、未鉴权），用于 `gramene_gene` 的 `include_structure`。
 
-零值诊断的两份件（`genes-msu-zero.json` / `genes-rapdb-osmads1.json`）于 2026-11-11 补采（同一 API base、直连、未鉴权、未重试），用于 零值诊断：前者是 3 个 MSU `LOC_Os…` 的真实空数组，后者是同一基因在 RAP-DB 空间的阳性对照。
+零值诊断的两份件（`genes-msu-zero.json` / `genes-rapdb-osmads1.json`）于 2026-11-11 补采（同一 API base、直连、未鉴权、未重试），用于 issue #94 / RC-04：前者是 3 个 MSU `LOC_Os…` 的真实空数组，后者是同一基因在 RAP-DB 空间的阳性对照。
 
 只有 `genes.json`、两个 `genes-structure*.json` 与 `genes-rapdb-osmads1.json` 做了裁剪，其余正例与负例都是原样保存。
 

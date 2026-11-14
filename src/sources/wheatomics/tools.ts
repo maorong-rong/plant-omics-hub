@@ -714,7 +714,7 @@ const searchPapers: ToolDefinition = {
     properties: {
       q: {
         type: 'string',
-        description: '全文关键词（标题/摘要/刊物/作者/AI 标签），例如 vernalization、drought、grain weight',
+        description: '全文关键词（标题/摘要/期刊/作者/AI 标签），例如 vernalization、drought、grain weight',
       },
       limit: {
         type: 'integer',
@@ -754,7 +754,7 @@ const searchPapers: ToolDefinition = {
     const body = [
       `命中 ${Number.isFinite(total) ? total : papers.length} 条文献（本次显示 ${Math.min(limit, papers.length)} 条）：`,
       '',
-      renderTable(['PMID', '日期', '刊物', '标题'], rows, { maxCell: 80, maxRows: limit }),
+      renderTable(['PMID', '日期', '期刊', '标题'], rows, { maxCell: 80, maxRows: limit }),
     ].join('\n');
 
     return result(body, res, data, `total=${Number.isFinite(total) ? total : papers.length}`);
@@ -1075,7 +1075,7 @@ const convertGeneIds: ToolDefinition = {
 
 // ── 2026-10-29 新增：跨物种同源 / VariantHub 目录 / VariantHub 区间查询 ──────
 //
-// 三者的上游证据与契约见各自端点的 fixture 说明。
+// 三者的上游证据与契约见 `记录/20261029-WheatOmics三工具契约.md`。
 // 两条贯穿始终的纪律：
 //   1. **0 条 ≠ 不存在**。WheatOmics 的 VariantHub 里，`genome_concordant=false`
 //      的数据集（本批 29 个中 2 个）坐标与参考基因组不一致；查这类数据集时
@@ -1342,7 +1342,7 @@ const crossSpeciesHomologs: ToolDefinition = {
     );
     const tail = shown < rows.length ? `\n（本次正文展示 ${shown} 条，另有 ${rows.length - shown} 条未展示；可减小 max_targets 或按物种分开查询）` : '';
     /**
-     * 机器可消费形态（封装层补齐第 6 条）：每条命中的 gene id / species / identity / E-value
+     * 机器可消费形态（issue #77 第 6 条）：每条命中的 gene id / species / identity / E-value
      * 都在这里逐字段给出，正文表格只当摘要。字段名沿用上游原名（identity/qcovs/evalue/score），
      * 不做单位换算、不补上游没给的 ortholog/paralog 分类。
      */
@@ -1454,7 +1454,7 @@ const SYNTENY_COUNTERPART_KEYS = [
 ] as const;
 
 /**
- * 封装层补齐第 1 条：让「对照物种没有 bp 坐标」这件事**有字段、有证据**，而不是留白。
+ * issue #77 第 1 条：让「对照物种没有 bp 坐标」这件事**有字段、有证据**，而不是留白。
  *
  * 实测（2026-11-10）：`/api/synteny/search` 的五列对照物种只有基因 ID（一列还可能是
  * 逗号分隔的多个 ID），不含坐标；再拿 4 个真实对照 ID 去问 `/api/genes/resolve`，
@@ -2287,7 +2287,7 @@ const variantQuery: ToolDefinition = {
     /**
      * raw 白名单投影。
      *
-     * **实测体积来源（2026-10-29 更正）**：
+     * **实测体积来源（2026-10-29 更正，见 `记录/20261029-更正-VariantHub响应体积来源判断.md`）**：
      * 单条 9398 B 的响应里，`data.samples`（487 个样本名）占 46.6%、`records[0].genotypes`（487 个基因型）占 41.5%，
      * 两者合计 **88.1%**；`info` 与 `info_raw` 各只占 3.5%。
      *
@@ -3003,7 +3003,7 @@ const wheatEnrichment: ToolDefinition = {
       jsonBody: { genes, padj_threshold: threshold },
     });
     /**
-     * 超时策略（封装层补齐第 5 条）：**显式上限 + 不重试**，默认 45 s（GO 4 基因实测 32.5 s，
+     * 超时策略（issue #77 第 5 条）：**显式上限 + 不重试**，默认 45 s（GO 4 基因实测 32.5 s，
      * 20 基因 33–39 s，50 基因会超）。timeout_ms 可下调到 5 s 做快速失败；
      * 超限时把上游/时限原文交给调用方，不静默降级成空结果。
      */
@@ -3043,7 +3043,7 @@ const wheatEnrichment: ToolDefinition = {
       .sort((a, b) => a.padj - b.padj || a.pvalue - b.pvalue || a.id.localeCompare(b.id));
 
     /**
-     * gene→GO / gene→KEGG 明细（封装层补齐第 5 条）。
+     * gene→GO / gene→KEGG 明细（issue #77 第 5 条）。
      *
      * 上游富集响应只有 k/K，没有「谁命中了哪个条目」；明细要另调
      * `/api/go/genes`（或 `/api/kegg/genes`）逐条目回查送检基因。

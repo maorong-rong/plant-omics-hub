@@ -25,7 +25,7 @@ import { InvalidArgumentError } from '../core/errors.js';
 import { validateArgs } from '../core/invoke.js';
 // v2.3「源市场制」：**全库不设上限**，唯一硬阈值是单次订阅集 ≤80，默认集 ≤40 只是软建议。
 // 旧的 MAX_SOURCES/MAX_TOOLS（20/40）只为 `raw.budget` 兼容字段仍在导出，**不参与任何判定**。
-import { countDefaultSetTools, DEFAULT_SET_TOOLS_SOFT_MAX, MAX_SOURCES, MAX_TOOLS, SUBSET_TOOLS_HARD_MAX } from '../service/budget.js';
+import { DEFAULT_SET_TOOLS_SOFT_MAX, MAX_SOURCES, MAX_TOOLS, SUBSET_TOOLS_HARD_MAX } from '../service/budget.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import {
   INTENT_BY_ID,
@@ -40,7 +40,7 @@ import {
 const TRUNCATE_MARKER = '\n…（正文已按预算截断；来源与免责行见下）';
 
 /**
- * 每工具 token 折算（按实测折算）：实测 37 工具 10,274 token ⇒ 约 280/工具。
+ * 每工具 token 折算（AGENTS.md v2.3 §10.2）：实测 37 工具 10,274 token ⇒ 约 280/工具。
  *
  * 只用于**估算并展示代价**，不是测量值；订阅集硬上限 80 工具的代价由此算出 ≈ 22,400 token。
  */
@@ -74,6 +74,28 @@ export interface StatusSnapshot {
   readonly enabledTools: readonly string[];
   /** 元工具名（如 hub_find_sources/hub_status 自身），用于分列预算 */
   readonly metaToolNames: readonly string[];
+  /**
+   * 按需展开会话读数（只有 on-demand 模式传）。
+   *
+   * **只报事实**：本会话真的装了什么、还有什么没装、三个上限各是多少。
+   * 不传时按切换前的静态语义汇报（默认下发 = 目录全量）。
+   */
+  readonly session?: StatusSessionView;
+}
+
+/** 本会话的按需展开读数；数字全部来自会话实例，不在本文件另算一份。 */
+export interface StatusSessionView {
+  readonly onDemand: boolean;
+  /** 目录里可展开的业务工具总数（= 目录工具数 − 元工具数） */
+  readonly catalogTools: number;
+  /** 默认会话实际下发数（on-demand = 元工具数；静态 = 目录全量） */
+  readonly defaultTools: number;
+  readonly loadedBusinessTools: readonly string[];
+  /** 本会话累计展开的工具数（只计新装；重复 find 不重复计数） */
+  readonly expandedTotal: number;
+  readonly perCallMax: number;
+  readonly softMax: number;
+  readonly hardMax: number;
 }
 
 /**
@@ -116,17 +138,32 @@ export interface StatusReport {
     budget: { sources: number; maxSources: number; tools: number; maxTools: number };
     /**
      * v2.3「源市场制」事实——**展示口径只读这里**：
-     * 全库只统计不设限；唯一硬阈值是单次订阅集 ≤80 工具；默认推荐集 ≤40 只是软建议。
+     * 全库只统计不设限；唯一硬阈值是单次订阅集 ≤80 工具；默认集 ≤40 只是软建议。
+     *
+     * 2026-11-13 起 `defaultSetTools` 的语义是「**默认会话实际下发数**」：
+     * 按需展开开启时 = 2（元工具），回滚时 = 目录全量。目录规模改由 `catalogTools` 表达，
+     * 三者不再混用一个数（见 docs/architecture/按需展开-2026-11-13/）。
      */
     market: {
       librarySources: number;
       libraryTools: number;
       defaultSetTools: number;
+      catalogTools: number;
+      expandableTools: number;
+      onDemand: boolean;
       defaultSetSoftMax: number;
       defaultSetOverSoftMax: boolean;
       subsetToolsHardMax: number;
       estTokensPerTool: number;
       subsetToolsHardMaxTokens: number;
+      /** 按需展开会话读数（静态模式不出现） */
+      session?: {
+        loadedBusinessTools: readonly string[];
+        expandedTotal: number;
+        perCallMax: number;
+        softMax: number;
+        hardMax: number;
+      };
     };
     intents: Array<{ id: IntentId; label: string; toolCount: number }>;
     uncoveredSpecies: string[];
@@ -186,21 +223,35 @@ export function buildStatusReport(snapshot: StatusSnapshot, at: string): StatusR
   lines.push(`服务端版本：${snapshot.version}`);
   lines.push('');
   /**
-   * 展示口径按 v2.3「源市场制」（2026-10-31 定稿）：
+   * 展示口径按 v2.3「源市场制」（2026-10-31 本涛确认）：
    *   - **全库只报统计，不带 "/20" "/40" 这类像上限的分母**——全库本来就没有上限；
    *   - 唯一硬阈值是**单次订阅集 ≤80 工具**，并给出 token 代价；
    *   - 默认推荐集 ≤40 是**软建议**，超了只警示；
    *   - **不再出现"剩余额度 N"**——那是旧口径的产物，会让人以为"再铺就到顶了"。
    */
-  // 默认集数字与 `/catalog.budget.defaultSetTools` 用**同一个算法**（budget.ts 的 countDefaultSetTools），
-  // 不再用 totalTools 顶替：P1 阶段两者恰好相等（默认集暂保持全库 42），但 P2b 真过滤后必须分开。
-  const defaultSetTools = countDefaultSetTools(snapshot.sources, metaTools);
+  // 默认下发数 = **本会话实际拿到的工具数**：按需展开时是元工具数（2），静态时是目录全量。
+  // 与 `/catalog.budget.defaultSetTools` 同一个口径；目录规模单独由 `catalogTools` 报。
+  const session = snapshot.session;
+  const catalogTools = totalTools;
+  const defaultSetTools = session ? session.defaultTools : totalTools;
+  const onDemand = session?.onDemand ?? false;
+  const expandableTools = Math.max(0, catalogTools - defaultSetTools);
   const overSoftMax = defaultSetTools > DEFAULT_SET_TOOLS_SOFT_MAX;
   const defaultSetGap = defaultSetTools - DEFAULT_SET_TOOLS_SOFT_MAX;
   lines.push(`规模（全库，不设上限）：源 ${snapshot.sources.length}；工具 ${sourceTools}＋元工具 ${metaTools}＝${totalTools}`);
-  lines.push(overSoftMax
-    ? `默认推荐集：${defaultSetTools} 个工具，已超软建议 ${DEFAULT_SET_TOOLS_SOFT_MAX} 共 ${defaultSetGap} 个（只警示、不拒绝；32K 上下文会明显拥挤，建议按需订阅）`
-    : `默认推荐集：${defaultSetTools} 个工具，软建议 ≤ ${DEFAULT_SET_TOOLS_SOFT_MAX}（超出只警示、不拒绝）；当前在软建议内`);
+  if (onDemand) {
+    lines.push(`默认下发：${defaultSetTools} 个工具（元工具；目录 ${catalogTools} 个工具，可展开 ${expandableTools} 个业务工具）`);
+    const loaded = session!.loadedBusinessTools.length;
+    lines.push(`展开：每次 ≤ ${session!.perCallMax} 个；会话累计硬上限 ${session!.hardMax} / 软建议 ${session!.softMax}；`
+      + `本会话已展开 ${session!.expandedTotal} 次、已加载业务工具 ${loaded} 个`);
+    if (loaded > session!.softMax) {
+      lines.push(`注意：本会话已加载业务工具 ${loaded} 个，超过软建议 ${session!.softMax}；上下文会明显变贵，建议新会话或缩小问题`);
+    }
+  } else {
+    lines.push(overSoftMax
+      ? `默认下发：${defaultSetTools} 个工具（目录全量），已超软建议 ${DEFAULT_SET_TOOLS_SOFT_MAX} 共 ${defaultSetGap} 个（只警示、不拒绝；32K 上下文会明显拥挤，建议按需订阅）`
+      : `默认下发：${defaultSetTools} 个工具（目录全量），软建议 ≤ ${DEFAULT_SET_TOOLS_SOFT_MAX}（超出只警示、不拒绝）；当前在软建议内`);
+  }
   lines.push(`订阅集（唯一硬阈值）：单次 ≤ ${SUBSET_TOOLS_HARD_MAX} 个工具 ≈ ${(SUBSET_TOOLS_HARD_MAX * EST_TOKENS_PER_TOOL).toLocaleString('en-US')} token`
     + `（按约 ${EST_TOKENS_PER_TOOL} token/工具折算；128K 上下文约 17%，32K 上下文约 70%）；按需订阅，全库多大都不影响单次上下文`);
 
@@ -298,11 +349,25 @@ export function buildStatusReport(snapshot: StatusSnapshot, at: string): StatusR
         librarySources: snapshot.sources.length,
         libraryTools: totalTools,
         defaultSetTools,
+        catalogTools,
+        expandableTools,
+        onDemand,
         defaultSetSoftMax: DEFAULT_SET_TOOLS_SOFT_MAX,
         defaultSetOverSoftMax: overSoftMax,
         subsetToolsHardMax: SUBSET_TOOLS_HARD_MAX,
         estTokensPerTool: EST_TOKENS_PER_TOOL,
         subsetToolsHardMaxTokens: SUBSET_TOOLS_HARD_MAX * EST_TOKENS_PER_TOOL,
+        ...(session
+          ? {
+            session: {
+              loadedBusinessTools: [...session.loadedBusinessTools],
+              expandedTotal: session.expandedTotal,
+              perCallMax: session.perCallMax,
+              softMax: session.softMax,
+              hardMax: session.hardMax,
+            },
+          }
+          : {}),
       },
       intents: counts,
       uncoveredSpecies: uncovered,

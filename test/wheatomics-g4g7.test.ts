@@ -193,7 +193,7 @@ describe('G7 wheatomics_enrichment：POST GO/KEGG + 体积闸', () => {
   });
 });
 
-// ── 封装层补齐：六条封装层缺口 ─────────────────────────────────────────────
+// ── issue #77：六条封装层缺口 ─────────────────────────────────────────────
 
 interface Routed { match: RegExp; payload?: unknown; error?: UpstreamError }
 
@@ -209,7 +209,7 @@ function routedContext(routes: Routed[]): { ctx: ToolContext; calls: Call[] } {
   return { ctx: { http }, calls };
 }
 
-describe('封装层补齐第 1 条：共线对照物种坐标=上游未给（结构化标注，不推算）', () => {
+describe('issue #77 第 1 条：共线对照物种坐标=上游未给（结构化标注，不推算）', () => {
   it('每条的对照物种拆成基因数组；coordinates 标 unknown 并给出实测证据', async () => {
     const { ctx } = contextFor(readPayload('synteny-interval.json'));
     const out = await tool('wheatomics_synteny').run({ region: 'chr1A:8000000-9000000', limit: 5 }, ctx);
@@ -232,7 +232,7 @@ describe('封装层补齐第 1 条：共线对照物种坐标=上游未给（结
   });
 });
 
-describe('封装层补齐第 3 条：PPI 分批 + 明确失败行为', () => {
+describe('issue #77 第 3 条：PPI 分批 + 明确失败行为', () => {
   it('4 个基因按 batch_size=2 分两批；边按去重合并，逐批请求进出处', async () => {
     const payload = readPayload('ppi-poppin.json');
     const { ctx, calls } = routedContext([
@@ -283,7 +283,7 @@ describe('封装层补齐第 3 条：PPI 分批 + 明确失败行为', () => {
   });
 });
 
-describe('封装层补齐第 4 条：regulatory motif→target 明细', () => {
+describe('issue #77 第 4 条：regulatory motif→target 明细', () => {
   it('hit_limit 触发 /hits，明细含 motif id/名称/来源通道/坐标/p 值，汇总保留', async () => {
     const { ctx, calls } = routedContext([
       { match: /\/hits\?/, payload: readPayload('regulatory-hits.json') },
@@ -318,7 +318,7 @@ describe('封装层补齐第 4 条：regulatory motif→target 明细', () => {
   });
 });
 
-describe('封装层补齐第 5 条：enrichment 超时上限 + gene→GO 明细', () => {
+describe('issue #77 第 5 条：enrichment 超时上限 + gene→GO 明细', () => {
   it('timeout_ms 透传到 HTTP 层；默认 45 s 且不重试', async () => {
     const { ctx, calls } = contextFor(readPayload('go-enrichment.json'));
     await tool('wheatomics_enrichment').run({ genes: GENES4, timeout_ms: 10_000 }, ctx);

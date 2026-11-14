@@ -4,7 +4,7 @@
 # 当前状态：本机没有 Docker，构建与运行均未验证，不能当已可用交付。
 #
 # 构建：  docker build -t plantomics-hub:0.1.0 .
-# 运行：  docker run --rm -p 8971:8971 -e PLANTOMICS_HUB_HOST=0.0.0.0 -e PLANTOMICS_HUB_TOKEN=<至少16字符> plantomics-hub:0.1.0
+# 运行：  docker run --rm -p 8787:8787 -e PLANTOMICS_HUB_HOST=0.0.0.0 -e PLANTOMICS_HUB_TOKEN=<至少16字符> plantomics-hub:0.1.0
 #
 # 注意：
 #   - 容器内必须绑 0.0.0.0，否则宿主机映射不到端口；绑非回环时配置层强制要求 token。
@@ -29,7 +29,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY cordis.patch.yml README.md LICENSE ./
 ENV PLANTOMICS_HUB_HOST=0.0.0.0
-ENV PLANTOMICS_HUB_PORT=8971
-EXPOSE 8971
+ENV PLANTOMICS_HUB_PORT=8787
+EXPOSE 8787
 USER node
 CMD ["node", "dist/service/cli.js"]

@@ -1,7 +1,7 @@
 import type { HttpResult } from '../../core/types.js';
 
 /**
- * 草莓源零值诊断（零值诊断）。
+ * 草莓源零值诊断（SB-09）。
  *
  * 上游对「无共线块」返回 HTTP 200 + totalBlockCount=0 + blocks=[]。旧封装把这种
  * 合法空形态当成 `UpstreamShapeError` 抛出，调用方只能记「本次未取到」，连 HTTP

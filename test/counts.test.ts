@@ -47,9 +47,12 @@ const counts = {
     { id: 'alpha', displayName: 'Alpha 平台', tier: 'T1', tools: 3 },
     { id: 'beta', displayName: 'Beta 数据库', tier: 'T2', tools: 1 },
   ],
-  // 默认推荐集是清单口径：内联数量规则要把清单写进 README 并逐项核
+  // 回滚口径的默认集（清单内源 + 元工具）
   defaultSetSources: ['alpha'],
   defaultSetTools: 4,
+  // 产品默认（按需展开）的默认会话下发数 / 可展开数
+  defaultSessionTools: 1,
+  expandableTools: 4,
   buildInfo: null,
 };
 
@@ -61,12 +64,12 @@ const table = (alpha = 3, beta = 1, alphaTier = 'T1') =>
 
 const readme = (block = renderReadmeBlock(counts), rows = table()) => `${block}\n${head(rows)}`;
 
-/** README 里另外两处内联数量（`/healthz` 示例与「默认加载清单」句）的规范行。 */
-const DEFAULT_LINE = '默认加载清单 1 个源、4 个工具（alpha）；清单外的源用 `x-plantomics-sources` 或 `PLANTOMICS_SOURCES` 自取（订阅集上限 80 个）';
+/** README 里另外两处内联数量（`/healthz` 示例与「按需展开」句）的规范行。 */
+const DEFAULT_LINE = '默认会话只下发 1 个元工具，其余 4 个业务工具按需展开（每次 ≤ 5，会话累计硬上限 80 / 软建议 40）；要静态装齐，用 `x-plantomics-sources` 或 `PLANTOMICS_SOURCES` 显式订阅（订阅集上限 80 个）';
 const inlineLines = (healthz = '"sources":2,"tools":5,"metaTools":1', budget = DEFAULT_LINE) =>
   `- \`GET /healthz\` 返回 \`{${healthz}}\`\n- ${budget}\n`;
 
-describe('README 内联数量（/healthz 示例与「默认加载清单」句）', () => {
+describe('README 内联数量（/healthz 示例与「按需展开」句）', () => {
   it('与 dist 一致时无问题', () => {
     expect(checkInlineNumbers(inlineLines(), counts)).toEqual([]);
   });
@@ -79,9 +82,9 @@ describe('README 内联数量（/healthz 示例与「默认加载清单」句）
   });
 
   it('预算句写旧数字时点名', () => {
-    const problems = checkInlineNumbers(inlineLines(undefined, '默认加载清单 1 个源、34 个工具（alpha）；清单外的源用 \`x-plantomics-sources\` 或 \`PLANTOMICS_SOURCES\` 自取（订阅集上限 80 个）'), counts);
+    const problems = checkInlineNumbers(inlineLines(undefined, '默认会话只下发 1 个元工具，其余 34 个业务工具按需展开（每次 ≤ 5，会话累计硬上限 80 / 软建议 40）；要静态装齐，用 `x-plantomics-sources` 或 `PLANTOMICS_SOURCES` 显式订阅（订阅集上限 80 个）'), counts);
     expect(problems.length).toBe(1);
-    expect(problems[0]).toContain('默认加载清单');
+    expect(problems[0]).toContain('按需展开');
   });
 
   it('句子被改写到认不出时也判红（改措辞必须同步生成器）', () => {
@@ -150,7 +153,7 @@ describe('离线总校验（--check 的实现）', () => {
   });
 
   it('AGENTS.md 三态：在就真核 80，不在就明确「未核对」——两态都不许静默', () => {
-    // 背景（2026-11-03）：AGENTS.md 被 .gitignore 忽略，任何外部 clone（含公开仓）
+    // 背景（后端负责人 2026-11-03）：AGENTS.md 被 .gitignore 忽略，任何外部 clone（含公开仓）
     // 都没有它。把它当"必须项"→ 公开树 npm test 必红；把它静默放过 → 规则被改也没人发现。
     // 所以断言的不是"有没有文件"，而是**函数有没有如实报告自己是哪种状态**。
     const state = inspectRulesAnchor();
@@ -416,6 +419,13 @@ describe('发布口径：市场描述必须等于 tarball 真实数量', () => {
   const clause = renderDescriptionClause(counts);
   const matching = market(`含 ${clause.zh}，覆盖若干物种。`, `${clause.en}, plus more.`);
 
+  it('主句讲按需展开：默认下发数与可展开数来自 counts', () => {
+    expect(clause.zh).toContain('默认会话只下发');
+    expect(clause.zh).toContain('按需展开');
+    expect(clause.en).toContain('by default');
+    expect(clause.en).toContain('on demand');
+  });
+
   it('短语一致时无问题', () => {
     expect(checkPublishedScope({ counts, market: matching })).toEqual([]);
   });
@@ -427,7 +437,7 @@ describe('发布口径：市场描述必须等于 tarball 真实数量', () => {
     });
     expect(problems.length).toBe(2);
     expect(problems[0]).toContain(renderDescriptionClause(counts).zh);
-    expect(problems[1]).toContain('plant-omics databases behind');
+    expect(problems[1]).toContain('tools by default');
   });
 
   it('市场第一条就是 npm latest → 版本闸通过', () => {

@@ -1,8 +1,11 @@
 # PR 离线全检：把本地 `npm run check` 变成合并前必须过的闸。
 #
-# `npm run check` 包含类型检查、离线用例、构建、数量闸、站点闸、措辞闸与契约闸，
-# 全程离线（fixture 回放，不联网），因此这里不设 token、不读 secrets。
-# 联网的 probe 与发布检查不在本工作流中运行。
+# 为什么需要它（P0 证据链）：`.github/workflows/` 原来只有 tag 触发的 publish-npm.yml，
+# 1196 个离线用例、数量闸、站点闸、措辞闸全靠人记得跑；PR #18 的 `gh pr checks` 报
+# "no checks reported"。这个工作流只跑**同一个** `npm run check`，不新增、不放宽任何检查项。
+#
+# 边界：`npm run check` 全程离线（fixture 回放，不联网），所以这里不设 token、不读 secrets。
+# 联网的 probe / counts --published / check:market 另由 probe.yml 与人工发布流程负责。
 
 name: ci
 
@@ -31,7 +34,7 @@ jobs:
       - name: 安装 Node
         uses: actions/setup-node@v4
         with:
-          # 与本地开发保持一致
+          # 与 publish-npm.yml 同版本：CI 与发布线不能各用一套 Node 口径
           node-version: '22.14.0'
           cache: npm
 

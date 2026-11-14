@@ -22,7 +22,7 @@ const regionPayload = () => ({
     region: 'chr1A:8650000..8660000',
     count: 3,
     records: [
-      { chromosome: 'chr1A', start_mb: 8.652783, end_mb: 8.653352, gene_primary: 'TraesCS1A03G0032400', gene_secondary: 'TraesCS1A02G013100', strand: '+', description: 'SENTINEL_TEXT', domain: 'PF00319: SRF-type' },
+      { chromosome: 'chr1A', start_mb: 8.652783, end_mb: 8.653352, gene_primary: 'TraesCS1A03G0032400', gene_secondary: 'TraesCS1A02G013100', strand: '+', description: 'PRIVATE_SENTINEL', domain: 'PF00319: SRF-type' },
       { chromosome: 'chr1A', start_mb: 8.6539, end_mb: 8.6545, gene_primary: 'TraesCS1A03G0032500', gene_secondary: 'TraesCS1A02G013200', strand: '-', description: null, domain: null },
       { chromosome: 'chr1A', start_mb: 8.655, end_mb: 8.656, gene_primary: 'TraesCS1A03G0032600LC', gene_secondary: null, strand: null, description: null, domain: null },
     ],
@@ -118,7 +118,7 @@ describe('WheatOmics Pfam / 区间注释（全离线）', () => {
     expect(raw.shown).toBe(2);
     expect(raw.next_offset).toBe(2);
     expect(raw.records[0]).toEqual({ gene_id: 'TraesCS1A03G0032400', gene_secondary: 'TraesCS1A02G013100', chromosome: 'chr1A', start_mb: 8.652783, end_mb: 8.653352, strand: '+' });
-    expect(JSON.stringify(out)).not.toContain('SENTINEL_TEXT');
+    expect(JSON.stringify(out)).not.toContain('PRIVATE_SENTINEL');
 
     const second = await geneAnnotation.run({ region: 'chr1A:8650000..8660000', limit: 2, offset: 2 }, context(payload).ctx);
     expect(second.text).toContain('展示第 3–3 条');
@@ -174,11 +174,11 @@ describe('WheatOmics Pfam / 区间注释（全离线）', () => {
   });
   it('自由文本与额外字段不进入正文或raw（合成哨兵）', async () => {
     const payload = fixture('pos');
-    payload.data.extraField = 'SENTINEL_TEXT';
-    payload.data.records[0].description = 'SENTINEL_TEXT';
-    payload.data.records[0].contact = 'SENTINEL_TEXT';
+    payload.data.secret = 'PRIVATE_SENTINEL';
+    payload.data.records[0].description = 'PRIVATE_SENTINEL';
+    payload.data.records[0].contact = 'PRIVATE_SENTINEL';
     const out = await geneAnnotation.run(args, context(payload).ctx);
-    expect(JSON.stringify(out)).not.toContain('SENTINEL_TEXT');
+    expect(JSON.stringify(out)).not.toContain('PRIVATE_SENTINEL');
   });
   it('404不能吞为查无', async () => {
     const http = (async (url: string) => { throw new UpstreamError('上游404', { url, status: 404 }); }) as Fetcher;

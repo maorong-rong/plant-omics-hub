@@ -61,7 +61,7 @@ describe('STRING 真实 fixture 回放', () => {
     const out = await interactionPartners.run(
       { species: 3702, string_id: '3702.Q9SXZ2', limit: 10 }, ok(f.payload).ctx);
     const raw = out.raw as any;
-    // 输出上限对账 后：returned 是"本次返回"，total 是"上游可用总数"。returned==limit 时
+    // SB-10 后：returned 是"本次返回"，total 是"上游可用总数"。returned==limit 时
     // 上游没给总数，只能 null + has_more=true，不许把 10 当成总数。
     expect(raw.returned).toBe(10);
     expect(raw.total).toBeNull();
@@ -493,7 +493,7 @@ describe('【证据自洽】fixture 原体与 sourceSha256 逐字节对应', () 
       .toBe(files.length);
     // 两类的具体数字也钉住：JSON 19 / 非 JSON 1（唯一那份是 camelCase 的 HTML 转发桩）。
     // 数字取自脚本分类结果，不凭记忆；若改了就说明 fixture 结构变了，要人看一眼。
-    // 输出上限对账 新增 3 份 JSON 真抓件（2x / 8x 各一份 limit=50、一份取全对照）。
+    // SB-10 新增 3 份 JSON 真抓件（2x / 8x 各一份 limit=50、一份取全对照）。
     expect({ jsonCount, textCount }).toEqual({ jsonCount: 19, textCount: 1 });
   });
 
@@ -605,7 +605,7 @@ describe('【证据自洽】fixture 原体与 sourceSha256 逐字节对应', () 
       }
     }
     expect(recaptured + notRecaptured, '分类总数应等于文件数').toBe(files.length);
-    // 本批 20 份全部是重取件（17 份 2026-11-01 重取 + 输出上限对账 新增 3 份 2026-11-11 复核抓取），
+    // 本批 20 份全部是重取件（17 份 2026-11-01 重取 + SB-10 新增 3 份 2026-11-11 复核抓取），
     // 故 notRecaptured 必须为 0；将来真有"原始抓取件"混入时这个数字会变，提醒人复核。
     expect({ recaptured, notRecaptured }).toEqual({ recaptured: 20, notRecaptured: 0 });
   });
@@ -983,9 +983,9 @@ describe('【第三层】emptyCondition 结构化：三要素必填 + 断言可�
 });
 
 /**
- * 输出上限对账：输出上限可对账。
+ * SB-10：输出上限可对账。
  *
- * 病根（草莓 2x/8x 两套真跑，此前真跑）：旧 raw 把"本次取回条数"写成 `total`，
+ * 病根（草莓 2x/8x 两套真跑，PR #91）：旧 raw 把"本次取回条数"写成 `total`，
  * 于是 43 次 limit=50 的调用把 1,797 条"返回数"求和当成"总数"，
  * 正文只写"本次取回 1,797 条 / 展示 824 条"，读者无法判断网络完整不完整。
  *
@@ -993,7 +993,7 @@ describe('【第三层】emptyCondition 结构化：三要素必填 + 断言可�
  * 否则 `total=null`（上游不提供总数）+ `has_more=true`，并给出 `next_step`。
  * 这组测试用**两套真跑同参数重取的原件** + 一份取全对照钉住这四件事。
  */
-describe('【输出上限对账】total / returned / has_more / next_step 可对账', () => {
+describe('【SB-10】total / returned / has_more / next_step 可对账', () => {
   const ACCOUNTING = ['total', 'returned', 'has_more', 'next_step'] as const;
 
   function assertAccounting(raw: Record<string, unknown>, label: string): void {

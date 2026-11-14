@@ -2,7 +2,7 @@
 /**
  * 启动 Streamable HTTP 服务（本机回环默认）。
  *
- *   npm run serve                      # 127.0.0.1:8971，不鉴权
+ *   npm run serve                      # 127.0.0.1:8787，不鉴权
  *   PLANTOMICS_HUB_PORT=0 npm run serve # 让系统分配端口，便于测试
  *   PLANTOMICS_HUB_HOST=0.0.0.0 PLANTOMICS_HUB_TOKEN=<≥16字符> npm run serve
  *

@@ -35,7 +35,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 
 /**
- * 预算口径（v2.3「源市场制」，2026-10-31 定稿）。
+ * 预算口径（v2.3「源市场」制，2026-10-31 本涛确认；沿革见 AGENTS.md §10.4）。
  *
  * **硬阈值只有一个：单次订阅集 ≤ 80 工具。** 全库源数、全库工具数、每源工具数都不设硬上限。
  * 为什么：上下文成本由「用户这次装了哪些源」决定，不由库房总量决定——
@@ -48,6 +48,8 @@ import { gunzipSync } from 'node:zlib';
  * - `MAX_SOURCES` / `MAX_TOOLS`：为了不破坏已有导入保留的**兼容别名**，值与上面的职责常量相同。
  */
 export const MAX_SUBSCRIPTION_TOOLS = 80;
+/** 每次按需展开上限（与 src/on-demand/config.ts 的 DEFAULT_EXPAND_PER_CALL_MAX 同步；由 checks 交叉核对） */
+export const EXPAND_PER_CALL_MAX = 5;
 export const DEFAULT_SET_TOOLS_SOFT_MAX = 40;
 export const HISTORICAL_SOURCE_LIMIT = 20;
 export const HISTORICAL_TOOL_LIMIT = 40;
@@ -133,8 +135,13 @@ export function collectCounts(registry, options = {}) {
     sourceTools,
     metaTools: metaToolNames.length,
     metaToolNames,
+    /** 回滚模式的默认清单（`PLANTOMICS_ON_DEMAND=0` 时跟它走） */
     defaultSetSources: DEFAULT_SET_SOURCES,
+    /** 回滚模式的默认下发数 = 清单内源工具 + 元工具 */
     defaultSetTools,
+    /** 按需展开（产品默认）：默认会话只下发元工具，其余按需展开 */
+    defaultSessionTools: metaToolNames.length,
+    expandableTools: tools - metaToolNames.length,
     tools,
     perSource: built,
     buildInfo: options.buildInfo !== undefined ? options.buildInfo : readBuildInfo(options.buildInfoPath),
@@ -151,15 +158,24 @@ export function collectCounts(registry, options = {}) {
  * @param {object} counts `collectCounts()` 的结果
  * @param {{ requested: string[], sources: number, tools: number }} [subscription]
  */
-export function buildBudgetReport(counts, subscription) {
+export function buildBudgetReport(counts, subscription, options = {}) {
   const subscriptionTools = subscription ? subscription.tools : undefined;
   const overSubscription = subscriptionTools !== undefined && subscriptionTools > MAX_SUBSCRIPTION_TOOLS;
   const tokenEstimate = counts.tools * TOKENS_PER_TOOL;
+  // 产品默认按需展开；`PLANTOMICS_ON_DEMAND=0` 的回归演练传 onDemand:false。
+  const onDemand = options.onDemand ?? true;
+  const productDefaultTools = counts.defaultSessionTools ?? counts.defaultSetTools ?? 0;
+  const defaultSessionTools = onDemand ? productDefaultTools : counts.defaultSetTools;
+  const expandableTools = onDemand ? counts.expandableTools : 0;
 
   return {
     sources: counts.sources,
     tools: counts.tools,
     metaTools: counts.metaTools,
+    onDemand,
+    defaultSessionTools,
+    expandableTools,
+    perCallMax: EXPAND_PER_CALL_MAX,
     defaultSetSources: counts.defaultSetSources,
     defaultSetTools: counts.defaultSetTools,
     perSource: counts.perSource,
@@ -172,7 +188,7 @@ export function buildBudgetReport(counts, subscription) {
     tokenEstimate,
     subscriptionTokens: subscriptionTools === undefined ? undefined : subscriptionTools * TOKENS_PER_TOOL,
     subscription: subscription ?? null,
-    overDefaultSuggestion: counts.defaultSetTools > MAX_TOOLS,
+    overDefaultSuggestion: defaultSessionTools > MAX_TOOLS,
     /** 唯一硬阈值：**指定的订阅集**超 80 才为真。全库再大也不会置真 */
     overBudget: overSubscription,
     /** 数字取自哪个构建产物（含 `-dirty` 标记）；`stats` 会把它打在首行 */
@@ -195,15 +211,19 @@ export function renderStatsText(report) {
   const lines = [
     `构建：${rev}${dirty ? ' ——工作区构建（含未提交改动），非发布口径' : ''}`
       + (build && build.builtAt ? ` · ${build.builtAt}` : ''),
-    `全库：${report.sources} 源 / ${report.tools} 工具（源工具 ${report.tools - report.metaTools} + 元工具 ${report.metaTools}）`
-      + ' —— 只报数，不拦截',
+    `目录：${report.sources} 源 / ${report.tools} 工具（源工具 ${report.tools - report.metaTools} + 元工具 ${report.metaTools}）`
+      + ' —— 只报数，不拦截（v2.3 §10.2.3）',
+    `      源数 20 是旧口径的历史参考（当前 ${report.sources}），不作失败条件。`,
     '',
     '| 源 | 等级 | 工具数 |',
     '|---|---|---|',
     ...report.perSource.map((source) => `| ${source.id} | ${source.tier} | ${source.tools} |`),
     '',
-    `默认推荐集（清单 ${report.defaultSetSources.join(', ')}）：${report.defaultSetTools} 工具，软建议 ≤ ${report.maxDefaultSetTools}`
-      + (report.overDefaultSuggestion ? ' ⚠️ 已超建议，32K 级上下文会明显拥挤（仅警示，不失败）' : ' ✅'),
+    report.onDemand
+      ? `默认会话：${report.defaultSessionTools} 个工具（元工具）；可展开业务工具 ${report.expandableTools} 个`
+        + `（每次 ≤ ${report.perCallMax}；会话累计硬上限 ${report.maxSubscriptionTools} / 软建议 ${report.maxDefaultSetTools}）`
+      : `默认推荐集（清单 ${report.defaultSetSources.join(', ')}）：${report.defaultSetTools} 工具，软建议 ≤ ${report.maxDefaultSetTools}`
+        + (report.overDefaultSuggestion ? ' ⚠️ 已超建议，32K 级上下文会明显拥挤（仅警示，不失败）' : ' ✅'),
   ];
 
   if (report.subscription) {
@@ -219,15 +239,18 @@ export function renderStatsText(report) {
     );
   }
 
-  // 语义要说准：有订阅集时报订阅集，没有时报默认集。两个数混用会让"当前集"变成假的。
+  // 语义要说准：有订阅集时报订阅集；没有订阅集时，按需展开模式报「默认会话」而不是「默认集」。
   // 百分比不在脚本里另算一套——占比口径的唯一真相是 AGENTS §10.2，脚本只报 token 数。
-  const scopeLabel = report.subscription ? '订阅集' : '默认集';
-  const scopeTokens = report.subscription ? report.subscriptionTokens : report.tokenEstimate;
+  const scopeLabel = report.subscription ? '订阅集' : (report.onDemand ? '默认会话' : '默认集');
+  const scopeTokens = report.subscription
+    ? report.subscriptionTokens
+    : report.defaultSessionTools * report.tokensPerTool;
   lines.push(
     `token 估算：每工具约 ${report.tokensPerTool}（实测 37 工具 10,274 token 折算）；`
-      + `${scopeLabel}约 ${scopeTokens} token；`
+      + `${scopeLabel} ${report.subscription ? report.subscription.tools : report.defaultSessionTools} 个工具约 ${scopeTokens} token；`
+      + `目录 ${report.tools} 个工具约 ${report.tokenEstimate} token；`
       + `${report.maxSubscriptionTools} 工具约 ${report.maxSubscriptionTools * report.tokensPerTool} token。`
-      + '上下文占比按每工具约 280 token 估算（脚本不另算百分比）',
+      + '上下文占比口径见 AGENTS §10.2（脚本不另算百分比）',
   );
 
   if (report.overBudget) {
@@ -245,18 +268,26 @@ export function renderReadmeBlock(counts) {
   const metaNote = counts.metaTools > 0 ? `（含 ${counts.metaTools} 个元工具）` : '';
   return [
     README_BEGIN,
-    `> **当前源码口径：${counts.sources} 源、${counts.tools} 工具${metaNote}。**`
+    `> **当前源码口径：${counts.sources} 源、${counts.tools} 工具${metaNote}；默认会话下发 ${counts.defaultSessionTools} 个元工具，其余 ${counts.expandableTools} 个业务工具按需展开。**`
       + ' 本块由 `npm run counts -- --write` 从 `dist/` 实测生成，勿手改；'
       + '已发布包能装到什么另见 `npm run counts -- --published`（两者可以不同，发布滞后不是索引写错）。',
     README_END,
   ].join('\n');
 }
 
-/** 市场索引描述里的数量短语：发布口径的规范措辞，前后端都别自己拼。 */
+/**
+ * 市场索引描述里的数量短语：发布口径的规范措辞，前后端都别自己拼。
+ *
+ * 2026-11-14 起主句讲**按需展开**（T1 卖点），不再把产品说成「N 个数据库、M 个工具」的普通数据源：
+ * 默认会话只下发 `defaultSessionTools` 个工具，其余 `expandableTools` 个业务工具按需展开。
+ * 两个数都来自发布包 tarball 的实测（`--published`），不许手写。
+ */
 export function renderDescriptionClause(counts) {
+  const defaultTools = counts.defaultSessionTools ?? counts.metaTools ?? 0;
+  const expandable = counts.expandableTools ?? Math.max(0, counts.tools - defaultTools);
   return {
-    zh: `${counts.sources} 个植物组学数据库、${counts.tools} 个 MCP 工具`,
-    en: `${counts.sources} plant-omics databases behind ${counts.tools} MCP tools`,
+    zh: `默认会话只下发 ${defaultTools} 个工具，按需展开 ${expandable} 个业务工具`,
+    en: `ships ${defaultTools} tools by default and expands ${expandable} more on demand`,
   };
 }
 
@@ -276,19 +307,14 @@ export function inlineNumberRules(counts) {
       render: `"sources":${counts.sources},"tools":${counts.tools}${metaField}`,
     },
     {
-      label: '「默认加载清单」句里的源清单与工具数',
-      // 兼容旧措辞（「当前源码的 N 个工具默认全部加载（订阅集上限 M 个）」），
-      // 否则旧 README 永远改不成新口径。新措辞必须**列出完整清单**：
-      // render 里带 DEFAULT_SET_SOURCES，所以清单变了而 README 没改，这条就会红——
-      // 锁的是"清单与代码一致"，不是"那句话的措辞好看"。
-      // 三种形态都要认：
-      //   ① 旧旧措辞「当前源码的 N 个工具仍全量常驻（规则允许到 M 个）」
-      //   ② 旧措辞「当前源码的 N 个工具默认全部加载（订阅集上限 M 个）」
-      //   ③ 新措辞「默认加载清单 … （订阅集上限 M 个）」
-      pattern: /(?:当前源码的\s*\d+\s*个工具(?:仍全量常驻（规则允许到|默认全部加载（订阅集上限)\s*\d+\s*个）|默认加载清单[^\n]*?（订阅集上限\s*\d+\s*个）)/g,
-      render: `默认加载清单 ${counts.defaultSetSources.length} 个源、${counts.defaultSetTools} 个工具（`
-        + `${counts.defaultSetSources.join('、')}）；清单外的源用 \`x-plantomics-sources\` 或 \`PLANTOMICS_SOURCES\` 自取`
-        + `（订阅集上限 ${MAX_SUBSCRIPTION_TOOLS} 个）`,
+      label: '「按需展开」句里的默认下发数与可展开数',
+      // 2026-11-13：默认集从"静态清单全量下发"改成"默认 2 个元工具 + 按需展开"。
+      // 锁两件事：① README 必须写清默认只下发多少、可展开多少；② 这些数字与 counts 一致。
+      // 旧措辞（「默认加载清单…」）保留兼容分支，`--write` 会把它归一成新句。
+      pattern: /(?:默认会话只下发\s*\d+\s*个元工具[^\n]*|默认加载清单[^\n]*?（订阅集上限\s*\d+\s*个）|当前源码的\s*\d+\s*个工具(?:仍全量常驻（规则允许到|默认全部加载（订阅集上限)\s*\d+\s*个）)/g,
+      render: `默认会话只下发 ${counts.defaultSessionTools} 个元工具，其余 ${counts.expandableTools} 个业务工具按需展开`
+        + `（每次 ≤ ${EXPAND_PER_CALL_MAX}，会话累计硬上限 ${MAX_SUBSCRIPTION_TOOLS} / 软建议 ${DEFAULT_SET_TOOLS_SOFT_MAX}）；`
+        + `要静态装齐，用 \`x-plantomics-sources\` 或 \`PLANTOMICS_SOURCES\` 显式订阅（订阅集上限 ${MAX_SUBSCRIPTION_TOOLS} 个）`,
     },
   ];
 }
@@ -412,7 +438,7 @@ export function checkReadmeTable(readme, counts) {
  * 规则文件（`AGENTS.md`）核对的三态。
  *
  * 为什么要三态：两态（有/无都当错误）会让**任何外部 clone 的 `npm test` 必红**——
- * 规则文件被 `.gitignore` 忽略、从不进公开仓，缺它不是仓库坏了，是这个检出本来就没有规则文件；
+ * `AGENTS.md` 被 `.gitignore` 忽略、从不进公开仓，缺它不是仓库坏了，是这个检出本来就没有规则文件；
  * 两态（有/无都放过）又会变成静默跳过，规则被改而代码没跟也没人发现。
  * 所以这里返回**显式状态值**，由调用方分别断言，谁也糊弄不了：
  *   `{ status: 'checked', problems: [], threshold: 80, soft: 40 }` 文件在，当前口径两档都对得上
@@ -447,7 +473,7 @@ function ruleScope(text) {
     // 波浪号围栏（~~~），整块删——只认 ``` 的话，示例用 ~~~ 包起来就又能冒充现行规则
     .replace(/^[ \t]*~{3,}[^\n]*\n[\s\S]*?^[ \t]*~{3,}[ \t]*$/gm, '');
   const section = RULES_SECTION.exec(cleaned)?.[0];
-  if (!section) return { error: '规则文件里找不到「十、入口与工具数量预算」这一节：规则结构变了，先对规则' };
+  if (!section) return { error: 'AGENTS.md 里找不到「十、入口与工具数量预算」这一节：规则结构变了，先对规则' };
   const headings = section.match(/^##\s*10\.1(?=\s|$)/gm) ?? [];
   if (headings.length === 0) return { error: '第十节里找不到 10.1 小节（当前口径表所在）：规则结构变了，先对规则' };
   if (headings.length > 1) {
@@ -510,7 +536,7 @@ export function inspectRulesAnchor(root = ROOT) {
     if (error?.code === 'ENOENT') return { status: 'rules-file-absent', problems: [] };
     return {
       status: 'checked',
-      problems: [`读规则文件失败（${error?.code ?? 'unknown'}：${error?.message ?? error}）：不是"没有规则文件"，是这个文件读不了`],
+      problems: [`读 AGENTS.md 失败（${error?.code ?? 'unknown'}：${error?.message ?? error}）：不是"没有规则文件"，是这个文件读不了`],
     };
   }
 
@@ -524,7 +550,7 @@ export function inspectRulesAnchor(root = ROOT) {
   if (hard.error) problems.push(hard.error);
   else if (hard.value !== MAX_SUBSCRIPTION_TOOLS) {
     problems.push(
-      `规则文件当前口径写 ≤ ${hard.value}，代码常量 MAX_SUBSCRIPTION_TOOLS=${MAX_SUBSCRIPTION_TOOLS}：`
+      `AGENTS.md 当前口径写 ≤ ${hard.value}，代码常量 MAX_SUBSCRIPTION_TOOLS=${MAX_SUBSCRIPTION_TOOLS}：`
         + '改阈值必须先改规则、再改代码，两边不许各说各话',
     );
   }

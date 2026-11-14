@@ -504,7 +504,7 @@ const lookup = checked({
     const header = [
       `文献 PMID ${pmid}：${safe(optString(result, 'title', prepared.url)) ?? '（无标题）'}`,
       renderFields([
-        ['刊物', safe(optString(result, 'journal', prepared.url))],
+        ['期刊', safe(optString(result, 'journal', prepared.url))],
         ['年份', optScalar(result, 'pubYear', prepared.url)],
         ['卷/期', [optScalar(result, 'volume', prepared.url), optScalar(result, 'issue', prepared.url)].filter(Boolean).join('/') || undefined],
         ['DOI', safe(optString(result, 'doi', prepared.url))],

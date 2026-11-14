@@ -96,7 +96,7 @@
 
 全部为 2026-11-10 真实响应；`capture.simulated=false`，`originalBytes` 是上游原体字节（文件本身另含 capture 包装与缩进）。这些件没有留 `rawBody`，因此登记在 `test/fixtures-provenance.test.ts` 的 `UNPROVEN` 清单里。
 
-## 封装层补齐 封装层补齐的 5 份真采集件（2026-11-10）
+## issue #77 封装层补齐的 5 份真采集件（2026-11-10）
 
 都存了 `rawBody` 原体 + `sourceSha256`（大写 SHA-256），`capture.rawBodySource=re-collected`，可离线复算：
 
@@ -117,7 +117,7 @@
 - `/api/go`（POST，超几何 + BH）与 `/api/go/genes`：前者只回 `N/n/results(k/K)`，后者才是「哪些送检基因命中该条目」。
 - `/api/genes/resolve`：按 ID 扫 Genefunc 表，返回 `gene_primary/gene_secondary/chinese_spring_02g`；对 01G 返回 count=0。
 
-## 零值诊断 零值诊断的 3 份真采集件（2026-11-11）
+## issue #84 零值诊断的 3 份真采集件（2026-11-11）
 
 都存了 `rawBody` 原体 + `sourceSha256`（大写 SHA-256），`capture.rawBodySource=re-collected`，可离线复算：
 
@@ -128,4 +128,4 @@
 | `regulatory-03g-404.json` | `GET /regulatory/gene/TraesCS1A03G0032400` | 404 | 41 | `{"detail":"Gene or transcript not found"}`；404 是端点错误，不能折成 0 条空结果，用于 `endpoint_error` |
 
 `no_record` 情形复用已有的 `ppi-empty.json`（02G 在 `PPI_poppin` 的合法空结果，105 B，2026-11-10 真采集）。
-四类情形各配 1 个测试，见 `test/wheatomics.test.ts` 的 `零值诊断 零值诊断` 一节。
+四类情形各配 1 个测试，见 `test/wheatomics.test.ts` 的 `issue #84 零值诊断` 一节。

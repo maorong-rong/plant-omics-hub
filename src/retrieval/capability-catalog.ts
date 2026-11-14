@@ -1,7 +1,7 @@
 /**
  * 检索层能力目录（`hub_find_sources` 的唯一数据源）。
  *
- * 设计要点（由本文与 `test/` 的双向一致测试共同固定）：
+ * 设计要点（见 `记录/20261029-hub_find_sources实现契约.md`）：
  *   - **语义放源级**（`SOURCE_SEMANTICS`），范围放工具级——防止逐工具乱标语义；
  *   - 意图用**封闭词表**，加意图必须同时改这里与契约记录；
  *   - 目录与注册表必须双向一致，由 `test/catalog-consistency.test.ts` 盯住。
@@ -457,7 +457,7 @@ export const TOOL_CAPABILITIES: readonly ToolCapability[] = [
     blindSpots: INTERPRO_BLIND,
   },
 
-  // ---- uniprot（实测四物种；口径 2026-11-03 由 plantomics维护者定，维护者转达）----
+  // ---- uniprot（实测四物种；口径 2026-11-03 由 plantomics后端负责人定，检索负责人转达）----
   // 注意：`speciesScope` 用 `speciesSatisfies` 认得的**中文规范名**（同 ensemblplants），
   // 不要抄 `manifest.species` 里的拉丁串（Arabidopsis thaliana / …），否则正好造成"物种口径漂移"。
   // 不新增意图 id：按名找=gene-search、按 ID 取=gene-detail、注释=annotation；

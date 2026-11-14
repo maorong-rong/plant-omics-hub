@@ -140,12 +140,17 @@ export function auditSpeciesLabels(allSpecies) {
 
 /**
  * 卡片描述模板：数字短语由 `scripts/counts.mjs` 的 `renderDescriptionClause()` 渲染（唯一实现），
- * 这里只接上「覆盖哪些作物」与统一的后半句。
- * @param {{clause: {zh: string, en: string}, crops: {zh: string, en: string}}} input
+ * 这里只接上「覆盖哪些作物」与跨库/出处/版本锚的辅句。
+ *
+ * 2026-11-14 作者定稿的 T1 文案方向：主句必须是「默认只下发 N 个工具，按需展开 M 个」——
+ * 这是与「把产品说成普通数据源」的关键区别；跨库、出处、版本锚只做辅句。
+ * 不写竞品名，数字全部来自发布口径。
+ * @param {{clause: {zh: string, en: string}, crops: {zh: string, en: string}, counts: {sources: number}}} input
  */
-export function renderCardDescription({ clause, crops }) {
+export function renderCardDescription({ clause, crops, counts }) {
+  const databases = counts?.sources ?? 0;
   return {
-    en: `${clause.en}, covering ${crops.en}. Thin plugin plus a remote MCP service; every output carries full provenance.`,
-    zh: `${clause.zh}，覆盖${crops.zh}。薄插件 + 远程 MCP 服务，输出带完整出处尾注。`,
+    en: `${clause.en}, covering ${crops.en}. ${databases} plant-omics databases; every output carries full provenance and version anchors.`,
+    zh: `${clause.zh}，覆盖${crops.zh}。跨 ${databases} 个植物组学数据库，输出带完整出处与版本锚。`,
   };
 }

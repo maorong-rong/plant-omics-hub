@@ -35,7 +35,9 @@ async function main(): Promise<void> {
   const sources = registry.listSources().map((b) => b.manifest.id).join(', ');
   process.stderr.write(
     `[plantomics-hub] 服务就绪 ${running.url}\n` +
-      `[plantomics-hub] 源 ${running.budget.sources}/20 · 工具 ${running.budget.tools}/40 · 工具名预算 ${running.budget.nameBudget} 字符\n` +
+      `[plantomics-hub] 源 ${running.budget.sources} · 目录工具 ${running.budget.catalogTools}`
+      + ` · 默认会话下发 ${running.budget.defaultSetTools}（按需展开 ${running.budget.onDemand ? '开' : '关'}）`
+      + ` · 可展开 ${running.budget.expandableTools} · 工具名预算 ${running.budget.nameBudget} 字符\n` +
       `[plantomics-hub] 源清单：${sources || '(无)'}\n` +
       `[plantomics-hub] 鉴权：${config.token ? 'Bearer token 已启用' : '未启用（仅回环绑定）'}\n`,
   );

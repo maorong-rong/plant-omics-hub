@@ -1,5 +1,5 @@
 {
-  "note": "示例产物：合成数据，工具名与源都是 demo_*，不是真实源；仅用于证明公开判分器可独立运行。",
+  "note": "示例产物：合成数据，工具名与源都是 demo_*，不是真实源；仅用于证明公开判分器可独立运行。真实产物由私有 runner 生成。",
   "phase": "r1b",
   "tasksSha256": "EXAMPLE-TASKS-SHA-NOT-REAL",
   "scriptSha256": "EXAMPLE-RUNNER-SHA-NOT-REAL",

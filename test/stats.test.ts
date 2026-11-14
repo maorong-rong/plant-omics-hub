@@ -35,10 +35,13 @@ function fakeRegistry(counts: number[]) {
 function run(
   counts: number[],
   subscription?: { requested: string[]; sources: number; tools: number },
+  // 这组用例测的是 v2.3 的静态预算口径；按需展开的渲染另有专门断言
+  options: { onDemand?: boolean } = { onDemand: false },
 ) {
   const report = buildBudgetReport(
     collectCounts(fakeRegistry(counts), { buildInfo: null }),
     subscription,
+    options,
   );
   return { code: report.overBudget ? 1 : 0, report, text: renderStatsText(report) };
 }
@@ -69,9 +72,17 @@ describe('全库只报数、不拦截（v2.3 §10.2.3）', () => {
     expect(text).toContain('只报数，不拦截');
     expect(text).toContain(`硬上限 ${MAX_SUBSCRIPTION_TOOLS}`);
   });
+
+  it('按需展开（产品默认）：报「目录」与「默认会话」，不再把目录当默认集', () => {
+    const { text } = run([49], undefined, { onDemand: true });
+    expect(text).toContain('目录：1 源 / 49 工具');
+    expect(text).toContain('默认会话：0 个工具（元工具）');
+    expect(text).toContain('可展开业务工具 49 个');
+    expect(text).not.toContain('默认推荐集');
+  });
 });
 
-describe('唯一硬阈值：订阅集 ≤ 80 工具', () => {
+describe('唯一硬阈值：订阅集 ≤ 80 工具（v2.3 §10.1/§10.2.1）', () => {
   it('未指定订阅集时只报默认集，report.subscription 为 null', () => {
     const { report } = run([41]);
     expect(report.subscription).toBeNull();
@@ -96,10 +107,11 @@ describe('唯一硬阈值：订阅集 ≤ 80 工具', () => {
   it('token 估算按每工具 280 折算，并给出 80 工具的代价', () => {
     const { report, text } = run([37]);
     expect(report.tokenEstimate).toBe(37 * TOKENS_PER_TOOL);
-    expect(text).toContain('默认集约');
+    expect(text).toContain('默认集');
+    expect(text).toContain(`37 个工具约 ${37 * TOKENS_PER_TOOL} token`);
     expect(text).toContain(`${MAX_SUBSCRIPTION_TOOLS * TOKENS_PER_TOOL} token`);
-    // 只报 token 数，不另算上下文百分比
-    expect(text).toContain('280 token 估算');
+    // 百分比口径归 AGENTS §10.2，脚本不另算一套
+    expect(text).toContain('§10.2');
     expect(text).not.toContain('32K 的');
   });
 
@@ -107,8 +119,9 @@ describe('唯一硬阈值：订阅集 ≤ 80 工具', () => {
     const { report, text } = run([60, 40], { requested: ['s1'], sources: 1, tools: 40 });
     expect(report.tokenEstimate).toBe(100 * TOKENS_PER_TOOL);
     expect(report.subscriptionTokens).toBe(40 * TOKENS_PER_TOOL);
-    expect(text).toContain('订阅集约');
-    expect(text).not.toContain('默认集约');
+    expect(text).toContain('订阅集');
+    expect(text).toContain(`40 个工具约 ${40 * TOKENS_PER_TOOL} token`);
+    expect(text).not.toContain('默认集 40 个工具');
   });
 });
 

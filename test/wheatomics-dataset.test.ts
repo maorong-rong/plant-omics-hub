@@ -25,7 +25,7 @@ const genome = () => ({
     annotation_source: null,
     doi: '10.1126/science.aar7191',
     publication_year: 2018,
-    aliases_json: 'SENTINEL_TEXT',
+    aliases_json: 'PRIVATE_SENTINEL',
   },
 });
 
@@ -67,7 +67,7 @@ describe('WheatOmics 基因组目录（全离线）', () => {
       mode: 'dataset', dataset_id: 'Chinese_Spring1.0', gene_count: 269428,
       gene_table: 'Genefunc_AABBDD_Chinese_Spring1_0_table', table_rows: 297642,
     });
-    expect(JSON.stringify(out)).not.toContain('SENTINEL_TEXT');
+    expect(JSON.stringify(out)).not.toContain('PRIVATE_SENTINEL');
   });
   it('表级接口失败不拖垮目录结果，但把原因写进 raw', async () => {
     const http = (async (url: string) => {

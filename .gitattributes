@@ -1,7 +1,10 @@
 # ==========================================
 # 植物组学数据接口 — .gitattributes
-# 目的：统一行尾，保证 fixture（真实响应快照）跨机 md5 可复现。
-# 说明：.gitattributes 的 eol 声明优先于 core.autocrlf。
+# 目的：统一行尾，保证 fixture（真实响应快照）跨机 md5 可复现
+# 建立：2026-10-27（统一文本行尾）
+# 背景：本机 core.autocrlf=true；若不显式声明，Linux 侧 clone 后
+#       fixture 的 CRLF 会与 Windows 侧不同，导致测试断言出现幽灵差异。
+# 说明：.gitattributes 的 eol 声明**优先于** core.autocrlf。
 # ==========================================
 
 # 默认：自动判定文本，仓库内统一 LF

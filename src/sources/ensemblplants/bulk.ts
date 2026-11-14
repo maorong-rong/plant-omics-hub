@@ -1,5 +1,5 @@
 /**
- * Ensembl Plants 参考蛋白整文件出口（参考蛋白整文件出口）。
+ * Ensembl Plants 参考蛋白整文件出口（issue #73 §1.2）。
  *
  * 语义与 `ic4r/bulk.ts`（G2）相同：**下载器 + 落盘 + 交账**，不是"把 30 MB 序列塞进上下文"。
  *   species → 上游 `*.pep.all.fa.gz` 落到本地缓存 → 解压、数条数、算 sha256/md5 → 返回 manifest。
@@ -7,7 +7,7 @@
  * 为什么这是 Ensembl Plants 的出口而不是新源：Ensembl Plants 早已是 10 源之一，
  * 这里只是给它补一个 bulk 出口（参考蛋白不按基因 ID 一条条查）。
  *
- * 完整性自校验（参考蛋白整文件出口）：
+ * 完整性自校验（issue #73 §1.2）：
  *   1. Content-Length 与落盘字节不一致 → 报错，不写 manifest；
  *   2. gzip 解压失败（截断/坏文件）→ 报错，不写 manifest；
  *   3. 解压后条数与 release 57 基线不一致 → `status: partial` + mismatch，**不静默通过**；
@@ -49,7 +49,7 @@ import { manifest } from './manifest.js';
 export interface ReferenceBaseline {
   /** 上游 gzip 字节数。 */
   bytes: number;
-  /** 上游 gzip md5（验收要求与 3773443a… 一致）。 */
+  /** 上游 gzip md5（issue #73 验收要求与 3773443a… 一致）。 */
   md5: string;
   /** 上游 gzip sha256。 */
   sha256: string;

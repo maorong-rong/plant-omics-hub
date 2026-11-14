@@ -1,7 +1,7 @@
 import type { HttpResult } from '../../core/types.js';
 
 /**
- * 零值诊断（零值诊断 / v2 D-01 第 1 步）。
+ * 零值诊断（issue #84 / v2 D-01 第 1 步）。
  *
  * 上游很多端点「查无」不报错：HTTP 200 + count=0 / results=[]。
  * 把这种 0 直接写成「没有数据」是本仓最危险的结论性错误——#75 实测 302 个 03G

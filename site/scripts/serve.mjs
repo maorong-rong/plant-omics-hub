@@ -5,7 +5,7 @@
  *
  * 用法：
  *   node site/scripts/serve.mjs 8091
- *   node site/scripts/serve.mjs 8091 --catalog-upstream http://127.0.0.1:8971
+ *   node site/scripts/serve.mjs 8091 --catalog-upstream http://127.0.0.1:8787
  *
  * `--catalog-upstream` 是**显式开关**，默认关闭：
  * - 关闭时本脚本只发静态文件，`fetch('/catalog')` 404 —— 市场页停在「待 /catalog」骨架。
@@ -31,7 +31,7 @@ for (let i = 0; i < argv.length; i += 1) {
   if (arg === '--catalog-upstream') {
     const value = argv[i + 1];
     if (!value) {
-      console.error('--catalog-upstream 需要一个 URL，例如 http://127.0.0.1:8971');
+      console.error('--catalog-upstream 需要一个 URL，例如 http://127.0.0.1:8787');
       process.exit(2);
     }
     try {

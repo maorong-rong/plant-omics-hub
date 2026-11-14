@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /**
- * 现状报告：把「逐源探活 attempts」「发布通道版本」「默认集读数」汇总成
- * `docs/现状-<date>.md`，并对读数不一致**报红**。
+ * 现状报告（P0 证据链）：把「10 源探活 attempts」「发布三通道版本」「默认集三处读数」
+ * 汇总成 `docs/现状-<date>.md`，并对三处读数不一致**报红**。
  *
- * 为什么要有它：默认集读数、发布通道版本这类事实会随时间漂移；让机器每天回答
- * “现在到底几比几”，比人记一张表可靠。
+ * 为什么要有它：方向文档 ④ G1/G2/G8 记录了三类漂移——默认集在 `catalog`（35）与
+ * `hub_status` / `tools/list`（41）各说一套；npm / 市场 / 云服务三个通道版本不同；
+ * PR 没有 CI。P0 的职责是**让机器每天回答“现在到底几比几”**，不是顺手把它们改一致
+ * （统一读数属于 P1/P2b，本阶段明确不做）。
  *
  * 两个入口，退出码语义不同（刻意分开，避免“生成报告”与“断言通过”混为一谈）：
  *
@@ -21,7 +23,7 @@
  *
  * 三处读数的读取方式（刻意都走**运行时接口**，不直接读源码常量，否则报告会替被测对象说话）：
  *   - `/catalog.budget.defaultSetTools`：在 127.0.0.1 起一个临时 HTTP 服务，GET /catalog；
- *   - `hub_status`：同一个服务上走 MCP `tools/call`，从正文解析「默认推荐集：N 个工具」；
+ *   - `hub_status`：同一个服务上走 MCP `tools/call`，从正文解析「默认下发：N 个工具」；
  *   - `tools/list`：同一个服务上走 MCP `tools/list`，数返回的 tool 条数。
  *
  * 边界：
@@ -50,16 +52,16 @@ export const READING_LABELS = {
 };
 
 /**
- * 从 `hub_status` 正文解析默认推荐集工具数。
+ * 从 `hub_status` 正文解析默认下发工具数。
  *
  * 为什么解析正文而不是 raw 字段：MCP `tools/call` 只回文本内容，`raw` 不出协议。
- * 正文有两种措辞（超软建议 / 在软建议内），但都以「默认推荐集：N 个工具」开头，
+ * 正文有两种措辞（超软建议 / 在软建议内），但都以「默认下发：N 个工具」开头，
  * 所以只认这一段；找不到就抛错——**不许猜一个数字**，否则报告会拿假数做断言。
  */
 export function extractHubStatusDefaultSetTools(text) {
-  const match = /默认推荐集：\s*(\d+)\s*个工具/.exec(String(text ?? ''));
+  const match = /默认下发：\s*(\d+)\s*个工具/.exec(String(text ?? ''));
   if (!match) {
-    throw new Error('hub_status 正文里找不到「默认推荐集：N 个工具」：无法读取 hub_status 的默认集读数');
+    throw new Error('hub_status 正文里找不到「默认下发：N 个工具」：无法读取 hub_status 的默认集读数');
   }
   return Number(match[1]);
 }
@@ -163,7 +165,7 @@ function one(value, fallback = '未知') {
 /**
  * 渲染 `docs/现状-<date>.md`。
  *
- * 内容分三块：逐源 attempts / 发布通道版本 / 默认集读数。
+ * 内容按 issue 验收的三块组织：逐源 attempts / 发布三通道版本 / 默认集三处读数。
  * **每一处都写“怎么读的”**：读者要能照着复现，而不是相信一张手写表格。
  */
 export function renderStatusReport(snapshot) {
@@ -206,7 +208,7 @@ export function renderStatusReport(snapshot) {
   lines.push('| 读数来源 | 工具数 | 怎么读的 |');
   lines.push('|---|---|---|');
   lines.push(`| \`${READING_LABELS.catalogDefaultSetTools}\` | ${one(consistency.values[READING_LABELS.catalogDefaultSetTools])} | 临时服务 \`GET /catalog\`，取 \`budget.defaultSetTools\`（按 \`DEFAULT_SET_SOURCES\` 清单算） |`);
-  lines.push(`| \`${READING_LABELS.hubStatusDefaultSetTools}\` | ${one(consistency.values[READING_LABELS.hubStatusDefaultSetTools])} | 同一服务走 MCP \`tools/call hub_status\`，解析正文「默认推荐集：N 个工具」 |`);
+  lines.push(`| \`${READING_LABELS.hubStatusDefaultSetTools}\` | ${one(consistency.values[READING_LABELS.hubStatusDefaultSetTools])} | 同一服务走 MCP \`tools/call hub_status\`，解析正文「默认下发：N 个工具」 |`);
   lines.push(`| \`${READING_LABELS.toolsListCount}\` | ${one(consistency.values[READING_LABELS.toolsListCount])} | 同一服务走 MCP \`tools/list\`，数返回条数 |`);
   lines.push('');
   if (consistency.consistent) {
@@ -214,7 +216,8 @@ export function renderStatusReport(snapshot) {
   } else {
     lines.push(`**一致性检查：❌ 不一致**——${consistency.problems.join('；')}。`);
     lines.push('');
-    lines.push('> 读数不一致时 `npm run status:check` 会 exit 1；本报告只报红，不自动改数。');
+    lines.push('> 这是 ④-G1 的已知缺口。P0 只负责**报红**：`npm run status:check` 在此检出上 exit 1。'
+      + '统一三处读数属于 P1/P2b，本报告不做修复。');
   }
   lines.push('');
 
@@ -264,7 +267,7 @@ export function renderStatusReport(snapshot) {
   lines.push('- 能证明：npm latest / 本地市场索引 / 云服务 `/healthz` 三处**当前版本**；');
   lines.push('- **不能证明**：39 个源工具逐个可用（探活端点只覆盖其中 8 个，其余只有离线 fixture 证据）；');
   lines.push('- **不能证明**：带 token 的公网端到端调用、真实 DSH 宿主装载（U2/U3 仍未知）；');
-  lines.push('- 不做修复：读数不一致时只报红，由维护者决定改哪一处。');
+  lines.push('- 不做修复：三处读数不一致是 P1/P2b 的工单；本报告只报红。');
   lines.push('');
 
   return `${lines.join('\n')}\n`;
@@ -363,7 +366,7 @@ export async function collectLocalReadings({ env = process.env } = {}) {
 
   const config = parseServiceConfig({
     ...env,
-    // 固定回环 + 随机端口：不暴露端口，也不和本机已有服务抢 8971。
+    // 固定回环 + 随机端口：不暴露端口，也不和本机已有服务抢 8787。
     PLANTOMICS_HUB_HOST: '127.0.0.1',
     PLANTOMICS_HUB_PORT: '0',
     // 报告是本机只读自查：不启用 token，避免把环境里可能存在的 token 带进临时服务。

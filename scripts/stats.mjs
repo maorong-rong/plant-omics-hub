@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * 预算自检（v2.3「源市场制」，2026-10-31 定稿）。
+ * 预算自检（v2.3「源市场」制，2026-10-31 本涛确认）。
  *
  * **唯一硬阈值：单次订阅集 ≤ 80 工具。** 全库源数与工具数只报数、不拦截——
- * 上下文成本由「这次装了哪些源」决定，不由库房总量决定。
+ * 上下文成本由「这次装了哪些源」决定，不由库房总量决定（AGENTS.md §10）。
  *
  * 订阅集怎么取：与运行时**同一个环境变量** `PLANTOMICS_SOURCES`（同一个 `parseSourceList`），
  * 因为那正是服务启动时加载的集合；这里另立一套解析就会与线上漂移。
@@ -21,6 +21,7 @@
  */
 
 import { createRegistry, parseSourceList } from '../dist/sources/index.js';
+import { onDemandEnabled } from '../dist/on-demand/config.js';
 
 import { buildBudgetReport, collectCounts, renderStatsText } from './counts.mjs';
 
@@ -36,7 +37,7 @@ if (enabled) {
   subscription = { requested: enabled, sources: subset.sources, tools: subset.tools };
 }
 
-const report = buildBudgetReport(counts, subscription);
+const report = buildBudgetReport(counts, subscription, { onDemand: onDemandEnabled() });
 
 if (asJson) {
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

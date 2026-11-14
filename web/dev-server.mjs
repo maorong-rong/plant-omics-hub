@@ -7,7 +7,7 @@
  * （静态站 + /mcp 反代），让本地验证与上线后的同源条件一致。
  *
  * 用法：
- *   node web/dev-server.mjs            # 默认 8094 → 上游 http://127.0.0.1:8971
+ *   node web/dev-server.mjs            # 默认 8094 → 上游 http://127.0.0.1:8787
  *   $env:PLANTOMICS_UPSTREAM='http://127.0.0.1:8793'; node web/dev-server.mjs 8094
  *
  * 注意：这是**开发用**，不鉴权、不做缓存、只监听回环地址；生产走 Nginx 配置（deploy/），不要用它上线。
@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(HERE);
 const PORT = Number(process.argv[2] || process.env.PLANTOMICS_DEV_PORT || 8094);
-const UPSTREAM = new URL(process.env.PLANTOMICS_UPSTREAM || 'http://127.0.0.1:8971');
+const UPSTREAM = new URL(process.env.PLANTOMICS_UPSTREAM || 'http://127.0.0.1:8787');
 // `/catalog` 单独指一个上游（通常是 web/catalog-stub.mjs）；不设就落到同一个 UPSTREAM。
 const CATALOG_UPSTREAM = process.env.PLANTOMICS_CATALOG_UPSTREAM
   ? new URL(process.env.PLANTOMICS_CATALOG_UPSTREAM)

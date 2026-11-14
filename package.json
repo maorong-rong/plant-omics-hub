@@ -1,9 +1,9 @@
 {
   "name": "plantomics-hub",
-  "version": "0.1.2",
+  "version": "0.2.2",
   "description": "PlantOmics Hub：把国内植物组学数据库的公开接口聚合成一套工具，一次维护、两个出口：stdio MCP server（Claude Code / Codex / Reasonix 可用）与 DSH 原生插件。",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "main": "./dist/dsh/index.js",
   "types": "./dist/dsh/index.d.ts",
   "exports": {
@@ -31,6 +31,7 @@
     "dist",
     "cordis.patch.yml",
     "README.md",
+    "LICENSE",
     "scripts/start-service.ps1"
   ],
   "scripts": {
@@ -45,6 +46,9 @@
     "counts": "node scripts/counts.mjs",
     "check:counts": "node scripts/counts.mjs --check",
     "check:contracts": "node scripts/check-contracts.mjs",
+    "check:on-demand": "node scripts/check-on-demand.mjs",
+    "check:on-demand:tokens": "node scripts/measure-on-demand-payload.mjs",
+    "e2e:on-demand": "node scripts/e2e-dsh-on-demand.mjs",
     "check:site": "node scripts/check-site.mjs",
     "check:wording": "node web/scripts/check-wording.mjs",
     "counts:published": "node scripts/counts.mjs --published",
@@ -101,12 +105,12 @@
     "name": "maorong-rong",
     "email": "299401268+maorong-rong@users.noreply.github.com"
   },
-  "homepage": "https://github.com/maorong-rong/plant-omics-hub#readme",
+  "homepage": "https://github.com/maorong-rong/plant-omics#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/maorong-rong/plant-omics-hub.git"
+    "url": "git+https://github.com/maorong-rong/plant-omics.git"
   },
   "bugs": {
-    "url": "https://github.com/maorong-rong/plant-omics-hub/issues"
+    "url": "https://github.com/maorong-rong/plant-omics/issues"
   }
 }

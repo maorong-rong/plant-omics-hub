@@ -163,7 +163,7 @@ export interface FetchJsonConfig {
  * **缺头 ≠ 值为 0**：字段缺失表示上游没给，值为 `'0'` 才是给了 0，源层不许 `?? 0` 兜底。
  */
 export const RESPONSE_HEADER_ALLOWLIST: ReadonlySet<string> = new Set([
-  // 只有**确实有消费者**的头才进这里（2026-11-01：没有消费者的头是以后没人会删的死条目）。
+  // 只有**确实有消费者**的头才进这里（后端负责人 2026-11-01：没有消费者的头是以后没人会删的死条目）。
   // 反向断言（test/http.test.ts）会扫源层实际读取项，白名单里有而没人读的直接判红。
   'x-total-results',      // UniProt：命中总数（totalFrom 四态在用）
   'x-uniprot-release',    // UniProt：数据版本（尾注「数据版本」行在用）

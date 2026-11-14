@@ -16,6 +16,12 @@ import type { SourceBundle, ToolDefinition } from '../core/types.js';
 import type { ToolRegistry } from '../core/registry.js';
 import { applyPinnedOrder, loadPinnedSources, type PinnedSources } from '../core/pinned.js';
 import { DEFAULT_SET_SOURCES, DEFAULT_SET_TOOLS_SOFT_MAX, SUBSET_TOOLS_HARD_MAX, defaultSetToolCount } from './budget.js';
+import {
+  DEFAULT_EXPAND_PER_CALL_MAX,
+  DEFAULT_SESSION_EXPAND_HARD_MAX,
+  DEFAULT_SESSION_EXPAND_SOFT_MAX,
+  type OnDemandConfig,
+} from '../on-demand/config.js';
 import { SERVICES_CATALOG, isCatalogServiceKey } from '../core/catalog-services.js';
 import { speciesNameZh } from './species-names.js';
 
@@ -59,9 +65,28 @@ export interface CatalogResponse {
   readonly generatedAt: string;
   readonly totals: { sources: number; tools: number; metaTools: number };
   readonly budget: {
-    /** 默认推荐集包含的源 id，顺序即推荐顺序（页面初始选中/全选一律照它，别自己全选所有源） */
+    /**
+     * 默认会话**实际下发**的源 id：
+     * - 按需展开开启时是空数组——默认只下发元工具，业务工具靠 `hub_find_sources` 展开；
+     * - 回滚时是 `DEFAULT_SET_SOURCES`（切换前的默认清单）。
+     *
+     * 契约判据（页面复算）：`defaultSetTools` 必须等于
+     * 「这些源的工具数之和 + totals.metaTools」，两种模式都成立。
+     */
     defaultSources: readonly string[];
+    /** 默认会话实际下发工具数：按需展开 = 元工具数（2）；回滚 = 目录默认集（49） */
     defaultSetTools: number;
+    /** 目录全量工具数（= totals.tools）；不再与 defaultSetTools 混用 */
+    catalogTools: number;
+    /** 目录里还能按需展开的业务工具数 = catalogTools − defaultSetTools（回滚恒为 0） */
+    expandableTools: number;
+    /** 本服务当前是否处于按需展开模式 */
+    onDemand: boolean;
+    /** 每次 `hub_find_sources` 最多展开几个 */
+    expandPerCallMax: number;
+    /** 会话累计展开硬上限 / 软建议 */
+    sessionExpandHardMax: number;
+    sessionExpandSoftMax: number;
     defaultSetSoftMax: number;
     defaultSetOverSoftMax: boolean;
     subsetToolsHardMax: number;
@@ -138,11 +163,26 @@ function probeOf(bundle: SourceBundle): CatalogSource['lastProbe'] {
  */
 export function buildCatalog(
   registry: ToolRegistry,
-  options: { version: string; now?: Date; pinnedSources?: PinnedSources },
+  options: {
+    version: string;
+    now?: Date;
+    pinnedSources?: PinnedSources;
+    /**
+     * 按需展开配置。不传 = **按需展开开启**（产品默认）；回滚演练的调用方必须显式传
+     * `{ enabled: false }`，避免"忘了传"把回滚读数伪装成默认读数。
+     */
+    onDemand?: Pick<OnDemandConfig, 'enabled' | 'perCallMax' | 'hardMax' | 'softMax'>;
+  },
 ): CatalogResponse {
   const bundles = registry.listSources();
   const tools: ToolDefinition[] = registry.listTools();
   const metaTools: ToolDefinition[] = registry.listMetaTools();
+  const onDemand = options.onDemand ?? {
+    enabled: true,
+    perCallMax: DEFAULT_EXPAND_PER_CALL_MAX,
+    hardMax: DEFAULT_SESSION_EXPAND_HARD_MAX,
+    softMax: DEFAULT_SESSION_EXPAND_SOFT_MAX,
+  };
 
   const sources: CatalogSource[] = bundles.map((bundle) => {
     const blind = blindSpotsOf(bundle);
@@ -164,10 +204,18 @@ export function buildCatalog(
     };
   });
 
-  // 默认集 = 不带订阅头时实际下发的工具数（含元工具：它们真的会进模型上下文）。
-  // 唯一真相是 `budget.ts` 的 `defaultSetToolCount()`（清单 + 元工具）：P1/0.1.2 默认集
-  // 暂保持全库 42，所以这里必须与 `tools/list` 相同；P2b/0.2.0 真过滤到 35 时也只改清单。
-  const defaultSetTools = defaultSetToolCount(registry);
+  /**
+   * 默认会话下发数 = 不带订阅头时**实际下发**的工具数（含元工具：它们真的会进模型上下文）。
+   *
+   * 2026-11-13 起两种模式：
+   *   - 按需展开：= 元工具数（2），`defaultSources` 为空（默认不预选任何源）；
+   *   - 回滚：= `defaultSetToolCount(registry)`（清单内源 + 元工具，= 目录全量 49）。
+   * 目录规模由 `catalogTools` 单独报，`defaultSetTools` 不再兼职两个含义。
+   */
+  const catalogTools = tools.length;
+  const defaultSetTools = onDemand.enabled ? metaTools.length : defaultSetToolCount(registry);
+  const expandableTools = onDemand.enabled ? Math.max(0, catalogTools - defaultSetTools) : 0;
+  const defaultSources = onDemand.enabled ? [] : [...DEFAULT_SET_SOURCES];
 
   /**
    * 排序：与 site/ 读**同一份** src/core/pinned-sources.json（构建后 dist/core/）。
@@ -191,11 +239,16 @@ export function buildCatalog(
     generatedAt: (options.now ?? new Date(registry.createdAt)).toISOString(),
     totals: { sources: bundles.length, tools: tools.length, metaTools: metaTools.length },
     budget: {
-      // 契约 v1.1 铁律 4：逐项来自 DEFAULT_SET_SOURCES，顺序照抄；defaultSetTools 必须等于
-      // 「这些源的工具数之和 + totals.metaTools」——页面据此复算，不许自己全选所有源。
-      // P1/0.1.2 的清单 = 全库 10 源（默认集暂保持 42）；P2b 才收紧到 7 源 35 工具。
-      defaultSources: [...DEFAULT_SET_SOURCES],
+      // 契约铁律：`defaultSetTools` 必须等于「defaultSources 各源工具数之和 + totals.metaTools」。
+      // 按需展开时左边是 metaTools（defaultSources 为空），回滚时是清单内源 + meta，两种模式都成立。
+      defaultSources,
       defaultSetTools,
+      catalogTools,
+      expandableTools,
+      onDemand: onDemand.enabled,
+      expandPerCallMax: onDemand.perCallMax,
+      sessionExpandHardMax: onDemand.hardMax,
+      sessionExpandSoftMax: onDemand.softMax,
       defaultSetSoftMax: DEFAULT_SET_TOOLS_SOFT_MAX,
       defaultSetOverSoftMax: defaultSetTools > DEFAULT_SET_TOOLS_SOFT_MAX,
       subsetToolsHardMax: SUBSET_TOOLS_HARD_MAX,

@@ -65,7 +65,7 @@ async function main() {
   const { renderDescriptionClause } = await import(
     pathToFileURL(join(ROOT, 'scripts', 'counts.mjs')).href
   );
-  const description = renderCardDescription({ clause: renderDescriptionClause(counts), crops });
+  const description = renderCardDescription({ clause: renderDescriptionClause(counts), crops, counts });
   const copy = {
     schemaVersion: 1,
     scope: 'published',

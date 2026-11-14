@@ -73,6 +73,21 @@ function syntheticRegistry(options: { tools: string[]; sources?: number; ids?: s
   return registry;
 }
 
+/**
+ * 本文件测的是**传输层加固**（鉴权 / Host-Origin 防护 / 请求体上限 / 进程不被打崩），
+ * 用的是不带会话的裸 POST，因此固定走**回滚/静态**路径：那才是这些反例原本的语义。
+ * 会话态与按需展开的行为由 test/on-demand-*.test.ts 与 `scripts/check-on-demand.mjs` 覆盖。
+ */
+const STATIC_ON_DEMAND = {
+  enabled: false,
+  notify: true,
+  perCallMax: 5,
+  softMax: 40,
+  hardMax: 80,
+  sessionTtlMs: 1_800_000,
+  sessionMax: 64,
+} as const;
+
 async function startService(overrides: Partial<Parameters<typeof parseServiceConfig>[0]> = {}, token?: string) {
   const config = parseServiceConfig({
     PLANTOMICS_HUB_HOST: '127.0.0.1',
@@ -80,7 +95,7 @@ async function startService(overrides: Partial<Parameters<typeof parseServiceCon
     ...(token ? { PLANTOMICS_HUB_TOKEN: token } : {}),
     ...overrides,
   } as NodeJS.ProcessEnv);
-  const service = createService({ registry: defaultRegistry, config });
+  const service = createService({ registry: defaultRegistry, config, onDemand: STATIC_ON_DEMAND });
   const instance = await service.start();
   running.push(instance);
   return instance;
@@ -88,16 +103,29 @@ async function startService(overrides: Partial<Parameters<typeof parseServiceCon
 
 describe('启动期预算门禁（v2.3 源市场制）', () => {
   it('正常注册表通过，并报出工具名预算与两级阈值', () => {
-    const report = assertBudget(defaultRegistry, 'plantomics-hub');
+    // 产品默认 = 按需展开：目录 49、默认会话 2、可展开 47
+    const report = assertBudget(defaultRegistry, 'plantomics-hub', true);
     expect(report.tools).toBe(49);
+    expect(report.catalogTools).toBe(49);
+    expect(report.metaTools).toBe(2);
+    expect(report.defaultSetTools).toBe(2);
+    expect(report.expandableTools).toBe(47);
+    expect(report.onDemand).toBe(true);
     expect(report.nameBudget).toBe(43);
     expect('mcp__plantomics-hub__'.length).toBe(21);
     // v2.3：全库只统计；硬阈值挂在订阅集上
     expect(report.subsetToolsHardMax).toBe(80);
     expect(report.defaultSetToolsSoftMax).toBe(40);
-    // P1/0.1.2（D2=A）：默认集暂保持全库 49，因此会触发软建议警示（只警示、不拒绝）。
-    expect(report.defaultSetTools).toBe(report.tools);
+    // 按需展开时默认只下发 2 个，不再触发 40 的软建议警示
+    expect(report.warnings).toHaveLength(0);
+  });
+
+  it('回滚（onDemand=false）：默认下发回到目录全量 49，并触发软建议警示', () => {
+    const report = assertBudget(defaultRegistry, 'plantomics-hub', false);
     expect(report.defaultSetTools).toBe(49);
+    expect(report.catalogTools).toBe(49);
+    expect(report.expandableTools).toBe(0);
+    expect(report.onDemand).toBe(false);
     expect(report.warnings.join()).toContain('软建议 40');
   });
 
@@ -118,23 +146,35 @@ describe('启动期预算门禁（v2.3 源市场制）', () => {
    * `defaultSetTools === 清单内源工具数之和 + totals.metaTools`。
    * 页面初始选中/全选都照它来，否则"默认 41 全选报警"的假象会回来。
    */
-  it('catalog 的 defaultSources 与 DEFAULT_SET_SOURCES 一致，且 defaultSetTools 可被页面复算', () => {
-    const catalog = buildCatalog(defaultRegistry, { version: '0.1.1+svc.8.test' }) as {
+  it('catalog 的 defaultSources / defaultSetTools 可被页面复算（按需展开与回滚两种模式）', () => {
+    type Catalog = {
       totals: { metaTools: number; tools: number };
       sources: Array<{ id: string; toolCount: number }>;
-      budget: { defaultSources: readonly string[]; defaultSetTools: number };
+      budget: { defaultSources: readonly string[]; defaultSetTools: number; catalogTools: number; expandableTools: number };
     };
-    expect(catalog.budget.defaultSources).toEqual([...DEFAULT_SET_SOURCES]);
-    const sum = catalog.sources
-      .filter((source) => catalog.budget.defaultSources.includes(source.id))
+    // 按需展开：默认不预选任何源，默认下发 = 元工具数
+    const onDemand = buildCatalog(defaultRegistry, { version: '0.1.1+svc.8.test' }) as Catalog;
+    expect(onDemand.budget.defaultSources).toEqual([]);
+    expect(onDemand.budget.defaultSetTools).toBe(onDemand.totals.metaTools);
+    expect(onDemand.budget.catalogTools).toBe(onDemand.totals.tools);
+    expect(onDemand.budget.expandableTools).toBe(onDemand.totals.tools - onDemand.totals.metaTools);
+
+    // 回滚：defaultSources 逐项等于 DEFAULT_SET_SOURCES，默认下发 = 清单内源 + 元工具
+    const rollback = buildCatalog(defaultRegistry, {
+      version: '0.1.1+svc.8.test',
+      onDemand: { enabled: false, perCallMax: 5, hardMax: 80, softMax: 40 },
+    }) as Catalog;
+    expect(rollback.budget.defaultSources).toEqual([...DEFAULT_SET_SOURCES]);
+    const sum = rollback.sources
+      .filter((source) => rollback.budget.defaultSources.includes(source.id))
       .reduce((total, source) => total + source.toolCount, 0);
-    expect(catalog.budget.defaultSetTools).toBe(sum + catalog.totals.metaTools);
-    // P1/0.1.2：默认集暂等于全库（49），不是真子集；P2b/0.2.0 才收紧到 35。
-    expect(catalog.budget.defaultSetTools).toBe(catalog.totals.tools);
+    expect(rollback.budget.defaultSetTools).toBe(sum + rollback.totals.metaTools);
+    expect(rollback.budget.defaultSetTools).toBe(rollback.totals.tools);
+    expect(rollback.budget.expandableTools).toBe(0);
   });
 
-  it('默认推荐集 49 超软建议 40：只警示、不拒绝（D2=A）', () => {
-    const report = assertBudget(defaultRegistry, 'plantomics-hub');
+  it('回滚时默认下发 49 超软建议 40：只警示、不拒绝（D2=A）', () => {
+    const report = assertBudget(defaultRegistry, 'plantomics-hub', false);
     expect(report.defaultSetTools).toBe(49);
     expect(report.defaultSetTools).toBeGreaterThan(DEFAULT_SET_TOOLS_SOFT_MAX);
     expect(report.warnings).toHaveLength(1);
@@ -178,7 +218,7 @@ describe('启动期预算门禁（v2.3 源市场制）', () => {
       sources: 21,
     });
     const config = parseServiceConfig({ PLANTOMICS_HUB_HOST: '127.0.0.1', PLANTOMICS_HUB_PORT: '0' } as NodeJS.ProcessEnv);
-    const service = createService({ registry: many, config });
+    const service = createService({ registry: many, config, onDemand: STATIC_ON_DEMAND });
     const instance = await service.start();
     try {
       expect(instance.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
@@ -193,10 +233,10 @@ describe('服务配置', () => {
     expect(() => parseServiceConfig({ PLANTOMICS_HUB_HOST: '0.0.0.0' } as NodeJS.ProcessEnv)).toThrow(ServiceConfigError);
   });
 
-  it('端口空串/纯空白视为未设置（回落 8971），不许变成 0 = 随机端口', () => {
+  it('端口空串/纯空白视为未设置（回落 8787），不许变成 0 = 随机端口', () => {
     // Number('') === 0，而端口 0 是合法的"随机端口"——不挡会静默起在没人知道的端口
-    expect(parseServiceConfig({ PLANTOMICS_HUB_PORT: '' } as NodeJS.ProcessEnv).port).toBe(8971);
-    expect(parseServiceConfig({ PLANTOMICS_HUB_PORT: '   ' } as NodeJS.ProcessEnv).port).toBe(8971);
+    expect(parseServiceConfig({ PLANTOMICS_HUB_PORT: '' } as NodeJS.ProcessEnv).port).toBe(8787);
+    expect(parseServiceConfig({ PLANTOMICS_HUB_PORT: '   ' } as NodeJS.ProcessEnv).port).toBe(8787);
     expect(parseServiceConfig({ PLANTOMICS_HUB_PORT: '0' } as NodeJS.ProcessEnv).port).toBe(0); // 显式给 0 才允许
     expect(() => parseServiceConfig({ PLANTOMICS_HUB_PORT: 'abc' } as NodeJS.ProcessEnv)).toThrow();
   });
@@ -288,7 +328,7 @@ describe('HTTP 鉴权', () => {
       PLANTOMICS_HUB_PORT: '0',
       PLANTOMICS_HUB_TOKEN: TOKEN,
     } as NodeJS.ProcessEnv);
-    const instance = await createService({ registry: counters, config }).start();
+    const instance = await createService({ registry: counters, config, onDemand: STATIC_ON_DEMAND }).start();
     running.push(instance);
 
     const response = await fetch(instance.url, {
@@ -370,7 +410,7 @@ describe('访问日志不泄漏参数', () => {
   it('工具名可记，参数值绝不进日志', async () => {
     const entries: ServiceLogEntry[] = [];
     const config = parseServiceConfig({ PLANTOMICS_HUB_HOST: '127.0.0.1', PLANTOMICS_HUB_PORT: '0' } as NodeJS.ProcessEnv);
-    const service = createService({ registry: defaultRegistry, config, logger: (entry) => entries.push(entry) });
+    const service = createService({ registry: defaultRegistry, config, onDemand: STATIC_ON_DEMAND, logger: (entry) => entries.push(entry) });
     const instance = await service.start();
     running.push(instance);
 
@@ -787,7 +827,7 @@ describe('审查反例：日志字段不可被客户端伪造', () => {
   it('未知方法名折叠为 (other)：含换行的伪造 method 不进日志', async () => {
     const entries: ServiceLogEntry[] = [];
     const config = parseServiceConfig({ PLANTOMICS_HUB_HOST: '127.0.0.1', PLANTOMICS_HUB_PORT: '0' } as NodeJS.ProcessEnv);
-    const instance = await createService({ registry: defaultRegistry, config, logger: (entry) => entries.push(entry) }).start();
+    const instance = await createService({ registry: defaultRegistry, config, onDemand: STATIC_ON_DEMAND, logger: (entry) => entries.push(entry) }).start();
     running.push(instance);
 
     const forgedMethod = 'tools/list\nFAKE 1970-01-01T00:00:00.000Z POST tools/call tool=evil → 200 0ms';
@@ -806,7 +846,7 @@ describe('审查反例：日志字段不可被客户端伪造', () => {
   it('未知工具名（含换行）一律记 (unknown)，已登记工具名照记', async () => {
     const entries: ServiceLogEntry[] = [];
     const config = parseServiceConfig({ PLANTOMICS_HUB_HOST: '127.0.0.1', PLANTOMICS_HUB_PORT: '0' } as NodeJS.ProcessEnv);
-    const instance = await createService({ registry: defaultRegistry, config, logger: (entry) => entries.push(entry) }).start();
+    const instance = await createService({ registry: defaultRegistry, config, onDemand: STATIC_ON_DEMAND, logger: (entry) => entries.push(entry) }).start();
     running.push(instance);
 
     const post = (name: string) => fetch(instance.url, {
@@ -825,7 +865,7 @@ describe('审查反例：日志字段不可被客户端伪造', () => {
   it('合法字符组成的未知方法名也折叠为 (other)——白名单而非正则', async () => {
     const entries: ServiceLogEntry[] = [];
     const config = parseServiceConfig({ PLANTOMICS_HUB_HOST: '127.0.0.1', PLANTOMICS_HUB_PORT: '0' } as NodeJS.ProcessEnv);
-    const instance = await createService({ registry: defaultRegistry, config, logger: (entry) => entries.push(entry) }).start();
+    const instance = await createService({ registry: defaultRegistry, config, onDemand: STATIC_ON_DEMAND, logger: (entry) => entries.push(entry) }).start();
     running.push(instance);
 
     await fetch(instance.url, {
@@ -841,7 +881,7 @@ describe('审查反例：日志字段不可被客户端伪造', () => {
   it('已登记工具名照常记录（白名单不误杀）', async () => {
     const entries: ServiceLogEntry[] = [];
     const config = parseServiceConfig({ PLANTOMICS_HUB_HOST: '127.0.0.1', PLANTOMICS_HUB_PORT: '0' } as NodeJS.ProcessEnv);
-    const instance = await createService({ registry: defaultRegistry, config, logger: (entry) => entries.push(entry) }).start();
+    const instance = await createService({ registry: defaultRegistry, config, onDemand: STATIC_ON_DEMAND, logger: (entry) => entries.push(entry) }).start();
     running.push(instance);
 
     await fetch(instance.url, {
@@ -860,6 +900,7 @@ describe('审查反例：请求体读取时间上限', () => {
     const instance = await createService({
       registry: defaultRegistry,
       config,
+      onDemand: STATIC_ON_DEMAND,
       bodyReadTimeoutMs: 300,
     }).start();
     running.push(instance);

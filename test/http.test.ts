@@ -45,7 +45,7 @@ function scanHeaderReads(fileName: string, text: string): HeaderReads {
   };
 
   /**
-   * **静态可解析的单跳别名**（2026-11-03 维护者授权、对抗审查者收紧）：
+   * **静态可解析的单跳别名**（2026-11-03 后端负责人授权、对抗审查者收紧）：
    *
    *   `const h = <表达式>.headers` / `const h = <表达式>["headers"]`  →  之后 `h['x-…']` 仍算读取。
    *
@@ -268,7 +268,7 @@ describe('createFetcher', () => {
   });
 });
 
-describe('响应头透出（白名单 x-*，2026-11-01 维护者裁定）', () => {
+describe('响应头透出（白名单 x-*，2026-11-01 后端负责人裁定）', () => {
   it('x-* 头被透出；缺头与「头值为 0」必须能分开', async () => {
     // 这两条是同一个字段的两种状态，源层靠它区分"真 0 条"与"上游没给计数"
     const withZero = (async () => response(200, '{"results":[]}', { 'x-total-results': '0' })) as unknown as typeof fetch;
@@ -320,7 +320,7 @@ describe('响应头透出（白名单 x-*，2026-11-01 维护者裁定）', () =
   });
 });
 
-describe('白名单与源层读取项必须对齐（2026-11-01 维护者）', () => {
+describe('白名单与源层读取项必须对齐（2026-11-01 后端负责人）', () => {
   /**
    * 白名单里暂时没有读取者的头：必须**显式登记**，不许靠"反正没人管"放过。
    *
@@ -340,7 +340,7 @@ describe('白名单与源层读取项必须对齐（2026-11-01 维护者）', ()
     const { RESPONSE_HEADER_ALLOWLIST } = await import('../src/core/http.js');
     const { registry } = await import('../src/sources/index.js');
 
-    // 2026-11-03 维护者裁定：只扫**已注册**的源。未接线但躺在工作区里的源（UniProt）
+    // 2026-11-03 后端负责人裁定：只扫**已注册**的源。未接线但躺在工作区里的源（UniProt）
     // 不算数——白名单的语义是"给已接入能力用的"，不是"预留给将来"。
     // 也随之撤掉原来那条「至少应扫到 UniProt 的计数头」：UniProt 未提交，要求它出现
     // 等于让任何干净检出 / 公开仓的 npm test 必红；红线应该钉在"真实存在的源"上。
@@ -428,7 +428,7 @@ describe('白名单与源层读取项必须对齐（2026-11-01 维护者）', ()
     const orphans = Object.keys(PENDING_READERS).filter((name) => !RESPONSE_HEADER_ALLOWLIST.has(name));
     const missing = [...used.keys()].filter((name) => !RESPONSE_HEADER_ALLOWLIST.has(name));
     // 反向：白名单里没有读取者的项 = 死条目（声明了没用，以后没人会删）。
-    // 没有这条，x-uniprot-release-date 能白挂一辈子而测试一直绿（2026-11-01）。
+    // 没有这条，x-uniprot-release-date 能白挂一辈子而测试一直绿（后端负责人 2026-11-01）。
     // 例外只有一个：PENDING_READERS 里显式登记过的待接入头。
     const dead = [...RESPONSE_HEADER_ALLOWLIST].filter((name) => !used.has(name) && !(name in PENDING_READERS));
     const stale = Object.keys(PENDING_READERS).filter((name) => used.has(name));

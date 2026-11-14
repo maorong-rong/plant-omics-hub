@@ -118,7 +118,7 @@ function annotation(data: Obj, key: string, url: string): string {
   return `${values.length}项${labels ? `；${labels}` : '（响应未提供）'}`;
 }
 /**
- * 混合注释：上游 geneOntology 是混合字段（IPR 条目 + eggNOG-mapper 的 GO 术语 +
+ * SB-01：上游 geneOntology 是混合字段（IPR 条目 + eggNOG-mapper 的 GO 术语 +
  * 无 IPR/GO 编号的结构域命中）。按 goId 前缀拆开，绝不把整块标成 GO。
  */
 function splitGeneOntology(data: Obj, url: string): { total: number; ipr: Obj[]; go: Obj[]; other: unknown[] } {

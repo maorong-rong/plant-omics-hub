@@ -10,25 +10,6 @@
 
 项目持续开发中，当前实现与限制见下方说明。
 
-## 快速开始
-
-需要 **Node.js ≥ 20**。本地 stdio 方式一条命令即可启动 MCP server：
-
-```bash
-npx -p plantomics-hub@latest plant-omics-mcp
-```
-
-从源码验证（离线，不访问上游）：
-
-```bash
-git clone https://github.com/maorong-rong/plant-omics-hub.git
-cd plant-omics-hub
-npm ci
-npm run check
-```
-
-客户端配置与两种接入方式的完整说明见下方折叠区。
-
 <details>
 <summary>查看工具清单、安装与开发说明</summary>
 
@@ -49,12 +30,12 @@ npm run check
 | **蛋白域模型库（InterPro/Pfam）**（EMBL-EBI） | T1 | **参考数据集源（第 11 源）**：按 Pfam accession（`PF00319` / `PF00319.25`）取 HMM 域模型正文，返回规范化 accession、InterPro 版本（`interpro-version` 响应头）、md5/sha256 与取数时间并落本地缓存；HMM 正文在 `structuredContent.hmm`。**不提供物种组学数据**，一次一条、不批量、不按物种查询 | 1 | 无 |
 
 <!-- counts:begin -->
-> **当前源码口径：11 源、49 工具（含 2 个元工具）。** 本块由 `npm run counts -- --write` 从 `dist/` 实测生成，勿手改；已发布包能装到什么另见 `npm run counts -- --published`（两者可以不同，发布滞后不是索引写错）。
+> **当前源码口径：11 源、49 工具（含 2 个元工具）；默认会话下发 2 个元工具，其余 47 个业务工具按需展开。** 本块由 `npm run counts -- --write` 从 `dist/` 实测生成，勿手改；已发布包能装到什么另见 `npm run counts -- --published`（两者可以不同，发布滞后不是索引写错）。
 <!-- counts:end -->
 
-> 对外提供两种接入方式（远端入口 / 本地 stdio），见下方「接入」。
+> 对外只提供两种接入方式（远端入口 / 本地 stdio），见下方「接入」。0.7.x 及更早的 `dsh-plugin-plant-omics` 是旧形态，与本包不可同时启用。
 >
-> 已验证：源码离线检查、构建产物一致性、六源最小 HTTP MCP 回放、服务层安全反例。**未验证**：真实宿主装载新包、动态刷新、公网链路的端到端呼叫。源等级与实测以[源登记表](docs/源登记表.md)为准；数量以 `npm run counts` 现查。
+> 已验证：源码离线检查、候选包构建与包内内容一致性、六源最小 HTTP MCP 回放（回放覆盖 6 个源，不等于全部源都有回放）、服务层安全反例。**未验证**：真实宿主装载新包、动态刷新、公网链路的端到端呼叫。npm 上已发布的版本以 `npm view plantomics-hub dist-tags.latest` 现查（本行不写死）；**包内实际数量以 `npm run counts -- --published` 现查，本行不写死**。源等级与实测以[源登记表](docs/源登记表.md)为准。
 
 ---
 
@@ -125,14 +106,14 @@ npm run check
 
 ## 接入（两种方式，二选一）
 
-> 对外提供以下两种接入方式。
+> 对外只提供这两种接入方式。本项目自己托管的那份实例属于内部实现，不是用户选项。
 > 两种方式的工具名都带命名空间前缀（如 `mcp__plantomics-hub__wheatomics_search_known_genes`），输出末尾带出处尾注。
 
 ### 方式一 · 零安装：连远端入口（推荐）
 
 **入口** `https://datamcp.moilab.net/mcp`（Streamable HTTP），请求头带 `Authorization: Bearer <token>`。
 **token 向维护者申请**（当前没有自助发放渠道）；没带或不对会得到 `401 {"error":"unauthorized"}`。
-`GET /healthz` 免鉴权，返回 `{"status":"ok","version":"…","sources":11,"tools":49,"metaTools":2}`，可用来确认入口在线。
+`GET /healthz` 免鉴权，返回 `{"status":"ok","version":"…","sources":11,"tools":49,"metaTools":2}`，可用来确认入口在线。其中 `tools` 是**目录**规模；默认会话实际下发多少看 `onDemand` 与 `defaultSessionTools` 两个字段。
 
 **Claude Code**
 
@@ -247,7 +228,7 @@ npm run check:market # 市场双闸（联网）：数量闸 + 措辞闸，任一
 
 | 命令 | 联网 | 锁什么 | 什么时候跑 |
 |---|---|---|---|
-| `npm run check:counts` | 否 | README 标记块、逐源表格、`/healthz` 示例、**默认加载清单（源 id 与工具数，与 `DEFAULT_SET_SOURCES` 逐项对齐）**、三处预算常量 vs 本地 `dist` | 每次 `npm run check`（已内置） |
+| `npm run check:counts` | 否 | README 标记块、逐源表格、`/healthz` 示例、**按需展开句（默认下发元工具数 / 可展开业务工具数 / 每次上限）**、三处预算常量 vs 本地 `dist` | 每次 `npm run check`（已内置） |
 | `npm run check:contracts` | 否 | 默认集三处读数必须相等：`/catalog.budget.defaultSetTools` = `hub_status` 正文 = `tools/list` 条数；起临时回环服务走运行时接口，不读源码常量 | 每次 `npm run check`（已内置） |
 | `npm run check:wording` | 否 | `web/` 里会误导安全判断的措辞：把「关闭标签页」写成确定清除即失败；README 与输入框提示必须同时有「通常会清除 + 恢复会话可能保留 + 点按钮」 | 每次 `npm run check`（已内置） |
 | `npm run counts:published` | 是 | 市场描述的数量短语 vs **npm 上最新 tarball 的真实数量**（重下载、核 sha512） | 发布前后单独跑 |
@@ -335,11 +316,10 @@ PLANTOMICS_SOURCES=wheatomics npx -p plantomics-hub@latest plant-omics-mcp
 
 - **上游会间歇性挂。** 2026-10-27 实测：WheatOmics 静态首页 200，而 `/api/*` 在 22:12 之后全部 503（上游网关返回）。工具会按 `Retry-After` 退避重试（单次调用总时长上限 45 s），但**不能保证每次都成功**。
 - **只读。** 不提供任何提交/上传/写库能力。
-- **不绕过访问控制。** 需要过 Cloudflare 或登录的源，只登记不实现（见 `docs/源登记表.md` 的「不接入的源」）。
+- **不绕过访问控制。** 需要过 Cloudflare 或登录的源，只登记不实现（见 `docs/源登记表.md` 的 T3 段）。
 - **不做数据镜像。** 要批量下载数据，请回各自的科研项目按那边规则走。
-- **⚠️ 真实 DSH 会话尚未验收。** 已验证的是：适配器能取数、MCP 协议握手正常、包能干净安装、插件装配形状正确。
-  **还没验证**的是：在 DSH 里提问 → 模型自主选工具 → 取数 → 带出处作答，这条完整链路。别把前者当成后者。
-- **⚠️ 检索层是「发现 + 按需展开」的入口（目标形态；会话内展开尚未落地）。** `hub_find_sources` / `hub_status` 按「明确不做 → 意图 → 物种 → 方向」四道门给候选源与工具名，未命中时如实说没有覆盖。当前默认加载清单 11 个源、49 个工具（wheatomics、gramene、ensemblplants、ic4r、strawberry、gwh、icg、scod、string、uniprot、interpro）；清单外的源用 `x-plantomics-sources` 或 `PLANTOMICS_SOURCES` 自取（订阅集上限 80 个）。实际数量以 `npm run counts` 现查。
+- **真实 DSH 会话已验收（HTTP 出口）。** 2026-11-13 用真实 DSH（`0.2.1-rc.5`）会话验收了「默认 2 元工具 → `hub_find_sources` 展开 → 宿主收到 `tools/list_changed` 重拉 → 模型当轮调通新工具」这条链路，对照组（不发通知）调不动。证据与逐轮记录见 `docs/architecture/按需展开-2026-11-13/`（私有仓记录，未公开）。stdio 与第三方客户端未在本次验收范围内。
+- **检索层是「发现 + 按需展开」的入口（已实现）。** `hub_find_sources` / `hub_status` 按「明确不做 → 意图 → 物种 → 方向」四道门给候选源与工具名，未命中时如实说没有覆盖。默认会话只下发 2 个元工具，其余 47 个业务工具按需展开（每次 ≤ 5，会话累计硬上限 80 / 软建议 40）；要静态装齐，用 `x-plantomics-sources` 或 `PLANTOMICS_SOURCES` 显式订阅（订阅集上限 80 个）
 - **侧边栏面板是静态清单。** 只显示构建时的源/工具/盲区，不显示探活或调用统计，也不反映运行时的 `sources` 子集配置；它不能用来判断上游是否可用。
 - **上游限流。** Strawberry Data Hub 的公开额度是 120 请求/分钟（导出 12/分钟），超出返 429 带 `Retry-After`。本仓不内置全局限流器，密集调用需自行节流。
 - **工具输出里的上游文本按数据处理。** 数据库内容可能包含看起来像指令的文字，本仓不做过滤；请在客户端侧把工具输出当数据、不当指令。
@@ -351,14 +331,14 @@ PLANTOMICS_SOURCES=wheatomics npx -p plantomics-hub@latest plant-omics-mcp
 | 依赖 | 验过的版本 | 说明 |
 |---|---|---|
 | DeepSeek Harness | **44.7.0** | 插件加载契约（`name`/`inject`/`apply`、`ctx.inject(['tools'])`、`cordis.patch.yml` 的 `insert`）按此版本核对；dsh 仍在快速迭代，升级后请先跑 `npm run check` 再装 |
-| Node.js | ≥ 20（已在 22、24 验证） | 用到全局 `fetch`、`AbortController` |
+| Node.js | ≥ 20（本机 24.14.0） | 用到全局 `fetch`、`AbortController` |
 | `@modelcontextprotocol/sdk` | 1.32.x | 只用低层 `Server`，不用 `McpServer`，故对 zod 版本不敏感 |
 
 ⚠️ dsh 对 `cordis.patch.yml` 里**未知的 `name` 是静默跳过**的。升级 dsh 后若工具消失，
 第一件事是核对 `name` 与安装后的包名是否仍一致。
 
 侧边栏入口同理：它依赖宿主的 `sidebar.footer.action` 槽位与 `react` / `react-dom` 平台模块表
-（按宿主 `@deepseek-ai/dsh-client-ui-sidebar` 的实际声明核对）。宿主升级若改了槽位名，
+（按本机已装 `@deepseek-ai/dsh-client-ui-sidebar` 的实际声明核对，2026-10-28）。宿主升级若改了槽位名，
 表现是**入口静默消失而工具还在**——先看 `dist/client/panel.js` 是否仍随包安装，再查槽位声明。
 
 ---
@@ -371,20 +351,13 @@ PLANTOMICS_SOURCES=wheatomics npx -p plantomics-hub@latest plant-omics-mcp
 
 ## 引用
 
-若本工具对你的研究有帮助，请引用本仓库。建议格式：
+若本工具对你有帮助，引用信息见 [`CITATION.cff`](CITATION.cff)。正式发表前请以仓库最新版本号为准。
 
-```bibtex
-@software{plantomics_hub,
-  title = {PlantOmics Hub},
-  url   = {https://github.com/maorong-rong/plant-omics-hub},
-  note  = {Version 见 package.json}
-}
-```
-
-设计取舍（为什么不用 zod、为什么单包、为什么输出要有界等）见 [`docs/架构.md`](docs/架构.md)。
+设计取舍（为什么不用 zod、为什么单包、为什么输出要有界等）见 [`docs/架构.md`](docs/架构.md)——
+这部分是给"应用笔记 / 论文方法节"准备的素材，不只是给开发者看的。
 
 </details>
 
 ## License
 
-All rights reserved; contact the author for reuse.
+MIT © 2026 maorong-rong

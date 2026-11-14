@@ -69,7 +69,7 @@ describe('species：中文映射，缺一条不许回落拉丁名', () => {
   it('每源 species 都是中文，且不含拉丁字母；参考数据集源允许为空但不得编造覆盖', () => {
     for (const source of catalogOf().sources) {
       if (source.species.length === 0) {
-        // 第 11 源 InterPro/Pfam 是**参考数据集**（参考数据集出口）：不提供物种组学数据，
+        // 第 11 源 InterPro/Pfam 是**参考数据集**（issue #73）：不提供物种组学数据，
         // species 为空是事实。空不许编造物种，只能如实显示「未登记覆盖范围」。
         expect(source.coverage, `${source.id} 无物种时不得编造覆盖范围`).toEqual(['未登记覆盖范围']);
         continue;

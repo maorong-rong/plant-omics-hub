@@ -1,8 +1,8 @@
-﻿/**
+/**
  * `hub_find_sources` —— 无状态"指路牌"：把一句自然语言问题映射到候选源与工具名。
  *
  * 它**不激活任何工具、不发任何上游请求、不替工具说"查无"**。
- * 排序规则、拒答文案、预算口径由本文件与测试共同固定。
+ * 排序规则、拒答文案、预算口径都按 `记录/20261029-hub_find_sources实现契约.md`。
  */
 
 import { InvalidArgumentError } from '../core/errors.js';
@@ -103,7 +103,7 @@ const COMPUTATION_RULES: ReadonlyArray<{ rule: string; test: RegExp }> = [
  *
  * 为什么需要它：上面第一版正则只给 6 字窗口，真实问法
  * 「帮我设计一下水稻的抗旱基因 PCR 引物」里"设计"到"引物"隔了 12 字，
- * 于是这条问法没被拦住，`detectIntents` 按"引物"给出 `reference-gene`，
+ * 于是 S-B5 没被拦住，`detectIntents` 按"引物"给出 `reference-gene`，
  * 用户问"设计引物"会被导向内参基因源——真实语料里已经发生过。
  *
  * 为什么是"动作在前"而不是双向：`引物设计`（对象+动作）由上面第一条规则覆盖；
@@ -161,7 +161,8 @@ interface Clause {
  *
  * 现有 `SOURCE_NAME_ALIASES` 里没有元字符，所以这条路径**当下不会被触发**——正因如此
  * 更不能没有断言：它曾经被写坏（替换串写成了一段函数声明）而长期无人发现，只因为零调用点。
- * 断言见 `test/find-sources.test.ts` 的独立用例。导出是为了让断言真正调用到它，
+ * 断言见 `test/find-sources.test.ts` 的独立用例，来源见
+ * `记录/20261030-检索层三条修复与R1前后对比.md` §五。导出是为了让断言真正调用到它，
  * 不是对外契约。
  */
 export function escapeRegExp(text: string): string {
@@ -238,11 +239,11 @@ function splitClauses(raw: string): Clause[] {
 function recognize(question: string, analysisTask = false): Recognized {
   const normalized = normalize(question);
   /**
-   * 题级判定为"分析/计算"时**不做意图识别**（2026-11-01 维护者裁定）。
+   * 题级判定为"分析/计算"时**不做意图识别**（2026-11-01 后端负责人裁定）。
    *
    * 「帮我设计 PCR 引物」里有"引物"，`detectIntents` 会把它认成 `reference-gene`
    * （内参基因），映射层据此把用户导向内参基因源——这不是假设，真实语料里已经发生
-   * （例如「帮我设计 PCR 引物」与「帮我设计一下水稻的抗旱基因 PCR 引物」）。
+   * （R1-13「帮我设计 PCR 引物」、S-B5「帮我设计一下水稻的抗旱基因 PCR 引物」）。
    * 所以硬排除不能靠"拒答文案"，必须**在意图识别之前**拦，且让 `recognized.intents` 为空：
    * 结构里留着错误意图，下游照样会误路由。
    */
@@ -935,6 +936,34 @@ export interface FindSourcesInput {
   readonly intentHint?: string;
 }
 
+/**
+ * 一次按需展开的结算结果（结构化，正文之外可核对）。
+ *
+ * `added` 是**本次真的装进会话**的业务工具名；`rejected` 是被会话硬上限挡下的候选。
+ * 三个上限数字随结果一并返回，正文与验收都从这一份取，不在两处各写一遍。
+ */
+export interface ExpansionOutcome {
+  readonly added: readonly string[];
+  readonly alreadyLoaded: readonly string[];
+  readonly rejected: readonly string[];
+  readonly reason?: 'hard-limit' | 'unknown-tool';
+  readonly perCallMax: number;
+  readonly hardMax: number;
+  readonly softMax: number;
+  /** 结算后会话累计加载的业务工具数（不含元工具） */
+  readonly totalLoadedBusiness: number;
+  readonly softExceeded: boolean;
+  readonly hardReached: boolean;
+}
+
+/** 会话侧展开能力（由 `src/on-demand/session.ts` 实现；检索层不碰注册表）。 */
+export interface ExpansionSession {
+  /** 本会话当前已加载的业务工具名（不含元工具） */
+  loadedTools(): readonly string[];
+  /** 请求把候选业务工具装进本会话；实现方负责每次 top-N、累计上限与通知 */
+  request(toolNames: readonly string[]): ExpansionOutcome;
+}
+
 export interface FindSourcesOutput {
   readonly text: string;
   readonly raw: {
@@ -977,6 +1006,11 @@ export interface FindSourcesOutput {
     readonly speciesGap?: 'not-given' | 'hint-unrecognized';
     /** B 档回显：用户原样给的 `species_hint`（便于验收核对没有被改写） */
     readonly hintEcho?: string;
+    /**
+     * 按需展开结算（只有按需展开会话才有）：本次装了什么、被什么挡下、会话累计多少。
+     * 验收读这个字段，不解析正文猜；`state != 'ok'` 时不会有展开动作。
+     */
+    readonly expansion?: ExpansionOutcome;
   };
 }
 
@@ -993,6 +1027,11 @@ export function findSources(input: FindSourcesInput, context: {
    * 这比不给推荐更糟（验收第 3 条：返回的工具名必须真的可调用）。
    */
   enabledTools?: readonly string[];
+  /**
+   * 按需展开会话：存在时，候选会按 score 顺序截取 top-N 装进本会话；
+   * 不存在时保持切换前的静态语义（候选都已在会话注册表里）。
+   */
+  expansion?: ExpansionSession;
   now?: Date;
 }): FindSourcesOutput {
   const question = input.question.trim();
@@ -1015,7 +1054,7 @@ export function findSources(input: FindSourcesInput, context: {
    *
    * 为什么必须**先于**意图识别：`设计引物` 里含 `引物`（内参基因意图的关键词），
    * 先识别意图就会得到 `reference-gene`，映射层据此导向内参基因源——
-   * 两条真实问法已经踩到。拒答之后 `recognized.intents` 也必须是空数组，
+   * R1-13 与 S-B5 两条真实问法已经踩到。拒答之后 `recognized.intents` 也必须是空数组，
    * 否则错误意图留在结构化字段里，下游照样误路由（所以 `recognize(question, true)`）。
    */
   const computation = detectComputation(question);
@@ -1096,6 +1135,51 @@ export function findSources(input: FindSourcesInput, context: {
   };
   /** 逐物种交代只认已加载的候选，否则会写成"命中：某物种→未加载源" */
   const verdicts = accountSpecies(found, installedPicked, context.enabledTools);
+
+  /**
+   * 按需展开结算：**只有真有候选时**才动会话注册表。
+   *
+   * 顺序刻意与渲染分开：先把「装了什么」定下来，渲染层只读结果，
+   * 于是正文里的「已展开/未展开」与 `raw.expansion` 不可能各说一套。
+   * 候选顺序 = `grouped` 的顺序（命中维度 > 语义等级 > 注册顺序），
+   * 每次最多 `perCallMax` 个由会话实现截断，检索层不重复实现上限。
+   */
+  const expansion = context.expansion;
+  let expansionOutcome: ExpansionOutcome | undefined;
+  let loadedBusiness: ReadonlySet<string> | undefined;
+  if (expansion && grouped.length > 0) {
+    // 把**全部**候选按优先级交给会话，由它区分"已加载/本次新增/被上限挡下"；
+    // 这里先过滤已加载会让「重复 find」在正文里变成"什么都没发生"，掩盖了幂等事实。
+    const ordered: string[] = [];
+    for (const group of grouped) {
+      for (const tool of group.tools) {
+        if (!ordered.includes(tool)) ordered.push(tool);
+      }
+    }
+    expansionOutcome = expansion.request(ordered);
+    loadedBusiness = new Set(expansion.loadedTools());
+  }
+  /** 静态模式（无 expansion）下候选本来就在注册表里，一律视为已加载。 */
+  const isLoaded = (name: string): boolean => (loadedBusiness ? loadedBusiness.has(name) : true);
+  const expansionLines = (): string[] => {
+    if (!expansionOutcome) return [];
+    const outcome = expansionOutcome;
+    const addedText = outcome.added.length > 0 ? `（${outcome.added.join('、')}）` : '';
+    const lines = [
+      `展开：本次新增 ${outcome.added.length} 个业务工具${addedText}；本会话已加载业务工具 ${outcome.totalLoadedBusiness} 个`
+        + `（每次 ≤ ${outcome.perCallMax}；会话累计硬上限 ${outcome.hardMax} / 软建议 ${outcome.softMax}）`,
+    ];
+    if (outcome.reason === 'hard-limit') {
+      lines.push(`- 已达会话硬上限 ${outcome.hardMax}：本次未新增工具。退路：新会话 / 显式订阅（x-plantomics-sources 或 PLANTOMICS_SOURCES）/ 缩小问题范围`);
+    }
+    if (outcome.reason === 'unknown-tool') {
+      lines.push(`- 候选里有不在目录中的工具名：${outcome.rejected.join('、')}（未展开）`);
+    }
+    if (outcome.softExceeded) {
+      lines.push(`- 注意：已加载 ${outcome.totalLoadedBusiness} 个业务工具，超过软建议 ${outcome.softMax}；上下文会明显变贵，建议新会话或缩小问题`);
+    }
+    return lines;
+  };
 
   const speciesText = found.species.length ? found.species.join('、') : '未识别出物种';
   const intentText = found.intents.length
@@ -1243,7 +1327,7 @@ export function findSources(input: FindSourcesInput, context: {
        * 多物种改成"没有源能同时满足这些物种与该意图"，这是唯一对所有物种都成立的说法。
        */
       /**
-       * 判定行：**一句合成**，不许"先写错再更正"（2026-11-03 维护者）。
+       * 判定行：**一句合成**，不许"先写错再更正"（2026-11-03 检索负责人）。
        * 反例：先说"没有覆盖 小麦 的「表达」类工具"，紧接着又说"wheatomics 它有这个能力"——
        * 两句同屏就是自相矛盾。已接入但未加载的源必须与"已加载却没这类工具"的源在同一句里分开写。
        */
@@ -1486,15 +1570,25 @@ export function findSources(input: FindSourcesInput, context: {
     // 逐物种交代放在候选之前：它先回答"每个物种怎么样"，候选块才是明细。
     // 顺序还有个硬理由——`finish()` 超预算从**尾部**截断，放在前面保证这段不会被切掉。
     lines.push(...verdictLines());
+    // 展开结算紧随命中行：读者先看到"这次装了什么、还剩什么可装"，再看逐源明细
+    lines.push(...expansionLines());
     shown.forEach((group, index) => {
       /**
        * 档位（2026-11-03 A 方案）只陈述**本会话装没装**，不暗示质量：
-       * 在启用集内 → 「默认可调用」；不在 → 「需订阅（本会话未加载 <id>，目录登记 N 个工具）」。
-       * N 取能力目录登记数——未加载的源不在注册表里，真实工具数拿不到；标注比精确更重要。
+       * 静态模式在启用集内 → 「默认可调用」；不在 → 「需订阅（…）」。
+       * 按需模式则按**本会话已展开**判：全部加载 → 已展开；部分 → 已展开 x/y；一个都没有 → 未展开。
        */
-      const tier = group.installed
-        ? '默认可调用'
-        : `需订阅（本会话未加载 ${group.sourceId}，目录登记 ${catalogToolCount(group.sourceId)} 个工具）`;
+      const mapped = group.installed && expansionOutcome !== undefined
+        ? (() => {
+          const loaded = group.tools.filter((tool) => isLoaded(tool));
+          if (loaded.length === group.tools.length) return '已展开，可直接调用';
+          if (loaded.length > 0) return `已展开 ${loaded.length}/${group.tools.length}（其余可再次 find 展开）`;
+          return '未展开（本次受会话上限限制）';
+        })()
+        : (group.installed
+          ? '默认可调用'
+          : `需订阅（本会话未加载 ${group.sourceId}，目录登记 ${catalogToolCount(group.sourceId)} 个工具）`);
+      const tier = mapped;
       lines.push(`${circled(index)} ${group.sourceId}｜${group.semantics}｜${tier}`);
       lines.push(`   命中：物种=${group.speciesLabels.join('、') || '不限'}；意图=${group.intentLabels.join('、')}`);
       lines.push(`   工具：${group.tools.join('、')}`);
@@ -1510,9 +1604,12 @@ export function findSources(input: FindSourcesInput, context: {
     // 未加载源单独成块（只出现一次）；候选区与命中数都不含它们（D6 等式不被污染）
     lines.push(...unloadedBlock());
     lines.push(...uncoveredIntentLines);
-    // 「下一步」只指向候选区里的源——候选区已经不含未加载源，这里不必再分档
-    // （R4：正文标了需订阅、收尾却说"直接调 xxx"，前半段就白写；未加载的加装路径在上一块里）
-    lines.push(`下一步：直接调 ${shown[0]!.tools[0]}（本次会话已加载该源，无需激活），参数见其 schema。`);
+    // 「下一步」只指向**本会话真的能调**的工具：按需模式下若一个都没展开，
+    // 还写"直接调 xxx"就是让模型去调一个它看不到的工具（R4 的同类错误）。
+    const readyTool = grouped.flatMap((group) => group.tools).find((tool) => isLoaded(tool));
+    lines.push(readyTool
+      ? `下一步：直接调 ${readyTool}（本次会话已加载该工具，无需激活），参数见其 schema。`
+      : '下一步：本会话还没有展开任何候选工具；请按上面的展开说明处理（新会话 / 显式订阅 / 缩小问题）。');
     return lines;
   };
 
@@ -1544,13 +1641,14 @@ export function findSources(input: FindSourcesInput, context: {
     clues,
     state: 'ok',
     speciesVerdicts: verdicts,
+    ...(expansionOutcome ? { expansion: expansionOutcome } : {}),
   });
 }
 
 /**
  * 候选源的圈号。①–⑳ 是同一套符号（U+2460 起连续 20 个），超过 20 个源才退化成 `(n)`。
  *
- * 只写到 ⑤ 时，第 6 个源会渲染成 `6. wheatomics｜…`，与前五个不是一套符号（2026-10-31 维护者指出）。
+ * 只写到 ⑤ 时，第 6 个源会渲染成 `6. wheatomics｜…`，与前五个不是一套符号（2026-10-31 检索负责人指出）。
  * 判据脚本按 `[①-⑳] ` 前缀数渲染了几个源，符号一乱就会把「渲染 1 源 / 命中 6 源」算错。
  */
 function circled(index: number): string {
@@ -1601,6 +1699,11 @@ export interface CatalogSnapshot {
    * 不求交就会推荐不存在的工具并承诺可调用（RETR-12）。
    */
   readonly enabledTools?: readonly string[];
+  /**
+   * 按需展开会话（只有 on-demand 模式传）：给了它，候选会按 top-N 装进本会话并发通知。
+   * 不传 = 切换前的静态语义（候选本来就在 tools/list 里）。
+   */
+  readonly expansion?: ExpansionSession;
 }
 
 /**
@@ -1615,7 +1718,11 @@ export function createFindSourcesTool(snapshot: CatalogSnapshot): ToolDefinition
     description:
       '不知道哪个数据库能回答时先用它：给一句自然语言问题（可带 species_hint/intent_hint），'
       + '返回候选源与可直接调用的工具名、命中依据与盲区；没有覆盖会如实说「未覆盖」而不是「数据不存在」。'
-      + '它是本地目录查询，不发任何上游请求，也不代替具体工具作答。',
+      + '它是本地目录查询，不发任何上游请求，也不代替具体工具作答。'
+      + (snapshot.expansion
+        ? '本服务默认只下发 2 个元工具；调用它后，命中的业务工具会被**展开进本会话**（每次最多 5 个），'
+          + '接着就能直接调用新增工具，不需要重连或重启。'
+        : ''),
     parameters: {
       type: 'object',
       properties: {
@@ -1638,6 +1745,7 @@ export function createFindSourcesTool(snapshot: CatalogSnapshot): ToolDefinition
         sourceCount: snapshot.sourceCount,
         toolCount: snapshot.toolCount,
         enabledTools: snapshot.enabledTools,
+        ...(snapshot.expansion ? { expansion: snapshot.expansion } : {}),
       });
       return {
         text: result.text,

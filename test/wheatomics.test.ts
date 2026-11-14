@@ -293,7 +293,7 @@ describe('wheatomics 工具', () => {
   });
 });
 
-// ── 2026-10-29 新增三工具（契约见 fixtures/README.md） ─────
+// ── 2026-10-29 新增三工具（契约见 记录/20261029-WheatOmics三工具契约.md） ─────
 //
 // 注意：这三个工具的 fixture 是**结构回放件**（capture.simulated = true），
 // 落地时上游 /api/* 返回 503 + Apache 维护页，无法保存原始响应体。
@@ -1404,7 +1404,7 @@ describe('WHT3-04 展示条数在首行、表格、尾行必须一致', () => {
 });
 
 
-describe('封装层补齐第 6 条：同源正文可机器消费（structuredContent）', () => {
+describe('issue #77 第 6 条：同源正文可机器消费（structuredContent）', () => {
   it('每条命中的 gene id / species / identity / E-value 逐字段给出，旧表格仍作摘要', async () => {
     const { ctx } = replay('homologs.json');
     const result = await tool('wheatomics_cross_species_homologs').run(
@@ -1442,7 +1442,7 @@ describe('封装层补齐第 6 条：同源正文可机器消费（structuredCon
   });
 });
 
-describe('封装层补齐第 3 条：gene_version 可省，03G/02G→02G 走 resolve，01G 回退 IWGSCv1_result', () => {
+describe('issue #77 第 3 条：gene_version 可省，03G/02G→02G 走 resolve，01G 回退 IWGSCv1_result', () => {
   const resolvePayload = (name: string): unknown => {
     const doc = JSON.parse(readFileSync(join(FIXTURE_DIR, name), 'utf8')) as { payload: unknown };
     return doc.payload;
@@ -1555,7 +1555,7 @@ describe('封装层补齐第 3 条：gene_version 可省，03G/02G→02G 走 res
   });
 });
 
-describe('零值诊断 零值诊断：0 条必须带四种原因之一，且不写「没有数据 / 不存在」', () => {
+describe('issue #84 零值诊断：0 条必须带四种原因之一，且不写「没有数据 / 不存在」', () => {
   interface CapturedReplay {
     capture: { originalBytes?: number; status?: number };
     payload: unknown;

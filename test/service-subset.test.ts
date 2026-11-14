@@ -29,12 +29,23 @@ afterEach(async () => {
   for (const service of running.splice(0)) await service.close().catch(() => {});
 });
 
-async function start(registry = defaultRegistry): Promise<RunningService> {
+/** 回滚配置：静态全量（显式订阅与"不指定"的旧语义都靠它复现）。 */
+const STATIC_ON_DEMAND = {
+  enabled: false,
+  notify: true,
+  perCallMax: 5,
+  softMax: 40,
+  hardMax: 80,
+  sessionTtlMs: 1_800_000,
+  sessionMax: 64,
+} as const;
+
+async function start(registry = defaultRegistry, onDemand = undefined): Promise<RunningService> {
   const config = parseServiceConfig({
     PLANTOMICS_HUB_HOST: '127.0.0.1',
     PLANTOMICS_HUB_PORT: '0',
   } as NodeJS.ProcessEnv);
-  const instance = await createService({ registry, config }).start();
+  const instance = await createService({ registry, config, ...(onDemand ? { onDemand } : {}) }).start();
   running.push(instance);
   return instance;
 }
@@ -48,8 +59,8 @@ async function connect(instance: RunningService, headers: Record<string, string>
   return client;
 }
 
-async function toolNames(headers: Record<string, string> = {}): Promise<string[]> {
-  const instance = await start();
+async function toolNames(headers: Record<string, string> = {}, onDemand = undefined): Promise<string[]> {
+  const instance = await start(defaultRegistry, onDemand);
   const client = await connect(instance, headers);
   const { tools } = await client.listTools();
   return tools.map((entry) => entry.name).sort();
@@ -158,18 +169,23 @@ describe('按请求选源：未知 id 必须报错', () => {
   });
 });
 
-describe('按请求选源：不指定时行为不变', () => {
-  it('不带请求头 → 工具清单与服务端注册表逐项相同', async () => {
+describe('按请求选源：不指定时 → 按需展开默认 2 个元工具', () => {
+  it('不带请求头 → 只有两个元工具（按需展开的默认会话）', async () => {
     const names = await toolNames();
-    expect(names).toEqual(defaultRegistry.listTools().map((tool) => tool.name).sort());
-    expect(names).toHaveLength(49);
+    expect(names).toEqual(['hub_find_sources', 'hub_status']);
   });
 
-  it('只有分隔符/空白 → 当作没指定（退回全集，不是空集）', async () => {
+  it('只有分隔符/空白 → 当作没指定（仍是默认会话，不是空集）', async () => {
     for (const value of ['', '   ', ',', ' , ; ']) {
       const names = await toolNames({ [SOURCE_SUBSET_HEADER]: value });
-      expect(names).toHaveLength(49);
+      expect(names).toEqual(['hub_find_sources', 'hub_status']);
     }
+  });
+
+  it('回滚（PLANTOMICS_ON_DEMAND=0 等价配置）→ 不带请求头时与服务端注册表逐项相同', async () => {
+    const names = await toolNames({}, STATIC_ON_DEMAND);
+    expect(names).toEqual(defaultRegistry.listTools().map((tool) => tool.name).sort());
+    expect(names).toHaveLength(49);
   });
 
   it('/healthz 仍报服务端全集，不受子集影响', async () => {
@@ -199,14 +215,15 @@ describe('按请求选源：握手 instructions 随子集变化（有意设计�
     expect(subsetInstructions).toContain('本次请求启用 1 个源、4 个工具');
     expect(subsetInstructions).toContain('只启用了部分源');
 
+    // 不带头的**新会话**是产品默认：按需展开，默认只下发 2 个元工具（不是 49）
     const fullClient = await connect(instance);
     const fullInstructions = fullClient.getInstructions() ?? '';
-    expect(fullInstructions).toContain('本次请求启用 11 个源、49 个工具');
+    expect(fullInstructions).toContain('本会话默认下发 2 个元工具');
     expect(fullInstructions).not.toContain('只启用了部分源');
   });
 
-  it('同一服务上不带头的下一条请求仍拿到全集（证明不是权限隔离）', async () => {
-    const instance = await start();
+  it('回滚模式下：同一服务上不带头的下一条请求仍拿到全集（证明不是权限隔离）', async () => {
+    const instance = await start(defaultRegistry, STATIC_ON_DEMAND);
     const subsetClient = await connect(instance, { [SOURCE_SUBSET_HEADER]: 'icg' });
     expect((await subsetClient.listTools()).tools).toHaveLength(4);
 

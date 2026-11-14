@@ -75,7 +75,7 @@ describe('GET /catalog：字段与类型', () => {
 });
 
 describe('GET /catalog：三条一致性铁律', () => {
-  it('#2 union(sources[].tools) + metaTools 与 tools/list 集合逐一相等（不是数量相等）', async () => {
+  it('#2 union(sources[].tools) + metaTools == 目录全量；默认会话 tools/list 是其子集', async () => {
     const instance = await start();
     const { json } = await getCatalog(instance.url);
 
@@ -86,20 +86,25 @@ describe('GET /catalog：三条一致性铁律', () => {
     await client.close();
 
     const fromSources: string[] = json.sources.flatMap((s: { tools: string[] }) => s.tools);
-    const toolSet = new Set(listed);
-    for (const name of fromSources) expect(toolSet.has(name), `sources[] 里的 ${name} 不在 tools/list`).toBe(true);
+    // 2026-11-13：目录规模与会话下发数是两件事。catalog 的 sources[] 描述**目录全量**，
+    // 默认会话按需展开后只下发 2 个元工具；两者不再是同一个集合，但必须逐项自洽：
+    //   ① sources[] 的并集 + totals.metaTools == budget.catalogTools；
+    //   ② 默认会话 tools/list 条数 == budget.defaultSetTools；
+    //   ③ 会话里的每个名字都属于「目录工具 ∪ 元工具」。
+    expect(fromSources.length + json.totals.metaTools).toBe(json.budget.catalogTools);
+    expect(listed.length).toBe(json.budget.defaultSetTools);
 
-    // 元工具 = 全集减去源工具名；逐个比对集合，不是比数量
-    const sourceToolSet = new Set(fromSources);
-    const metaFromList = listed.filter((name) => !sourceToolSet.has(name));
-    expect(metaFromList.length, '元工具数必须等于 totals.metaTools').toBe(json.totals.metaTools);
-    expect(new Set([...fromSources, ...metaFromList])).toEqual(toolSet);
     // 元工具不得混进任何 sources[]（把 hub_* 塞进某个源数组凑数 = 断言失败）
+    const sourceToolSet = new Set(fromSources);
     for (const name of listed.filter((n) => n.startsWith('hub_'))) {
       expect(sourceToolSet.has(name), `${name} 是元工具，不该出现在 sources[].tools`).toBe(false);
     }
-    // sources[] 里也不许出现不存在的工具名（多了=重复），两边逐一相等才算铁律
-    expect(fromSources.length + metaFromList.length).toBe(listed.length);
+    // 会话工具 ⊆ 目录工具 ∪ 元工具；且不重复
+    expect(sourceToolSet.size).toBe(fromSources.length);
+    const metaNames = new Set(['hub_find_sources', 'hub_status']);
+    for (const name of listed) {
+      expect(sourceToolSet.has(name) || metaNames.has(name), `tools/list 里的 ${name} 不在目录里`).toBe(true);
+    }
   });
 
   it('#3 /catalog 的 totals 与 /healthz 同源', async () => {
@@ -204,7 +209,7 @@ describe('GET /catalog：边界与禁止项', () => {
 /**
  * ETag 与 304（契约 §二：`ETag: "<内容哈希>"`）。
  *
- * 2026-11-03 维护者实测的 M2：ETag 每次都变、304 从未发生。根因是 `generatedAt`
+ * 2026-11-03 检索负责人实测的 M2：ETag 每次都变、304 从未发生。根因是 `generatedAt`
  * 是"本次响应的时刻"，被算进了哈希。下面几条把"内容哈希"钉住：同内容同 ETag、命中返 304 空体、
  * 不命中的 If-None-Match 不许被误判成 304。
  *

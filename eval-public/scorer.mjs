@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// 本文件由 scripts/build-eval-public.mjs 从私有判分器生成；源 eval/r1b-20261031/scorer.mjs（sha256=3F478E93309109407C9EB238E660C0F92E63A48D50574CA01E6B1FE978EF0609）
 /**
  * R1b 判据评分器（v2.2 口径，2026-10-31 draft-2）。
  *
@@ -33,8 +34,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // ───────────────────────────────────────────────────────────────────────────
-// 本文件是公开判分器：判定逻辑见下，可直接阅读与运行。
-// 期望来源、runner 身份与题集哈希都通过命令行参数传入（见下方 getArg 与 loadExpect）。
+// 公开版（eval-public/）：判定逻辑照抄私有判分器 eval/r1b-20261031/scorer.mjs，
+// 只把「期望来源 / runner 身份 / 题集哈希」改成命令行参数（见下方 getArg 与 loadExpect）。
+// **题面与期望值不公开**：公开判分器是为了让人复核"判定是怎么算的"，不是给人照题刷分。
 // 用法：node scorer.mjs <产物.json> --expect <期望.json> [--expect-sha <sha>] [--tasks-sha <sha>] [--runner-sha <sha>]
 // ───────────────────────────────────────────────────────────────────────────
 const getArg = (name) => {

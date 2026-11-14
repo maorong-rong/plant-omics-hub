@@ -7,7 +7,7 @@ import type { SourceManifest } from '../../core/types.js';
  * 在本地 HMMER 里鉴定基因家族成员，本身不描述任何一个物种的组学数据。所以
  * `species` 故意留空：它不按物种覆盖，也不能被 `hub_find_sources` 当成物种源召回。
  *
- * 为什么必须新增源（参考数据集出口）：A 套的 4 个输入里，Pfam HMM 只能绕过
+ * 为什么必须新增源（issue #73 §1.1）：A 套（#70）的 4 个输入里，Pfam HMM 只能绕过
  * 中间层直连 `https://www.ebi.ac.uk/interpro/wwwapi/entry/pfam/...`。把这条也接进
  * 同一层，「所有输入都走中间层」这句话才成立。
  *

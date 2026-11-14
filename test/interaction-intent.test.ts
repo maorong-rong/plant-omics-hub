@@ -4,7 +4,7 @@ import { INTENT_BY_ID, INTENTS, TOOL_CAPABILITIES } from '../src/retrieval/capab
 import { registry } from '../src/sources/index.js';
 
 /**
- * 新意图 `interaction`（蛋白互作）的上线约束（2026-11-01 裁定）。
+ * 新意图 `interaction`（蛋白互作）的上线约束（后端负责人 2026-11-01 裁定）。
  *
  * 背景：STRING 的 `interaction_partners` 找不到现成意图可归——硬塞进 `homolog` 会把
  * "同源"和"互作"两类完全不同的生物学关系混成一类。所以新开一个意图，但**新意图必须自带边界**：
@@ -43,7 +43,7 @@ const NEGATIONS = ['不做', '不含', '不支持', '不是', '不算', '不提�
  * 同句判定会把这种漏掉，而漏掉正是要防的方向。
  */
 function positiveInteractionClaim(text: string): string | undefined {
-  // 转折词：含"但/不过/然而/只是/除外"时，后半句才是真正的表述（2026-11-01）。
+  // 转折词：含"但/不过/然而/只是/除外"时，后半句才是真正的表述（后端负责人 2026-11-01）。
   // "不返回序列，但支持互作"里，否定落在前半句，互作声明在后半句——只按"紧邻 8 字"仍会漏，
   // 所以先按转折词切段，段内再按句号切，逐段判定。
   const TRANSITIONS = /但|不过|然而|只是|除外/g;

@@ -18,7 +18,7 @@
   "canonicalSha256": "604D290B13E013EF961E044F9298E890982779D42117058907D8296418711652",
   "canonicalSha256OfRawBody": "604D290B13E013EF961E044F9298E890982779D42117058907D8296418711652",
   "canonicalNote": "canonicalSha256 = 键名递归排序后 JSON.stringify 再 sha256（与 test 里 canonicalJson 同算法）；非 JSON 原体（HTML 桩）按原文 UTF-8 直接哈希。sourceSha256 只对给定基线验一致性，不证明历史采集动作；**canonicalSha256 表示\"本次比较的这两份内容一致\"，不保证未来抓取仍相同**——它不预设上游的序列化行为会一直不变。",
-  "context": "复核抓取：同一请求参数（species=3702、required_score=400、limit=50）重取 SOC1（AT2G45660 → 3702.O64645）。该基因在该条件下实测有 248 个伙伴，limit=50 只回前 50 条，用于验证输出上限的可对账性。",
+  "context": "SB-10 复核抓取：与 analysis/strawberry-2x 真跑（PR #91）同一请求参数（species=3702、required_score=400、limit=50，见 analysis/strawberry-2x/strawberry_pipeline.py:1416）重取 SOC1（AT2G45660 → 3702.O64645）。该基因在该条件下实测有 248 个伙伴，limit=50 只回前 50 条——正是 SB-10 的截断现场。",
   "strawberryRun": {
    "panel": "2x",
    "aggregate": {
@@ -26,6 +26,7 @@
     "returnedSum": 1797,
     "shownSum": 824
    },
+   "source": "analysis/strawberry-2x/results/ppi.summary.json partnerTruncation",
    "note": "聚合里的 total=1797 是旧 raw.total 的求和，即每基因'本次返回'条数之和（上限 limit=50），不是上游总数；旧前端把它当总数，得到'1,797 / 824'的错误完整性叙述"
   },
   "rawBodySource": "re-collected",

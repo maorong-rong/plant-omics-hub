@@ -10,11 +10,11 @@ import { validateProbe } from '../src/sources/scod/probe.js';
 
 /** 合成反例工厂；下方独立describe使用经过原体哈希核对的四份真实裁剪fixture。 */
 const simulated = {
-  genomes: () => [{ genomeId: 1, name: 'S. spontaneum Np-X', species: 'Saccharum spontaneum', submitter: 'SENTINEL_TEXT' }],
+  genomes: () => [{ genomeId: 1, name: 'S. spontaneum Np-X', species: 'Saccharum spontaneum', submitter: 'PRIVATE_SENTINEL' }],
   page: (total = 2, start = 0, length = 5): any => ({ draw: 1, recordsTotal: total, recordsFiltered: total, error: null,
     data: Array.from({ length: Math.min(length, Math.max(0, total - start)) }, (_, i) => ({ genomeId: 1,
       geneId: `Npp.TEST${start + i}.1`, chrom: 'Chr1A', posStart: String(130574 + (start + i) * 10),
-      posEnd: String(130580 + (start + i) * 10), description: 'SENTINEL_TEXT', genome: { submitter: 'SENTINEL_TEXT' } })),
+      posEnd: String(130580 + (start + i) * 10), description: 'PRIVATE_SENTINEL', genome: { submitter: 'PRIVATE_SENTINEL' } })),
   }),
 };
 const args = { genome_id: 1, chrom: 'Chr1A', pos_start: 100000, pos_end: 200000 };
@@ -103,7 +103,7 @@ describe('SCOD：simulated离线契约与反例', () => {
     expect(out.text).toContain('共1条，展示1条');
     expect(out.text).toContain('HTTP 200');
     expect(out.meta.at).toMatch(/^\d{4}-/);
-    expect(JSON.stringify(out)).not.toContain('SENTINEL_TEXT');
+    expect(JSON.stringify(out)).not.toContain('PRIVATE_SENTINEL');
   });
   it('目录名称隐私哨兵从正文和raw省略', async () => {
     const payload = simulated.genomes(); payload[0]!.name = 'person@example.com';
@@ -137,7 +137,7 @@ describe('SCOD：simulated离线契约与反例', () => {
     expect(out.text).toContain('本页返回并展示2条');
     expect(out.text).toContain('下一页start=2');
     expect(out.text).toContain('0条不等于“这个位置没有基因”');
-    expect(JSON.stringify(out)).not.toContain('SENTINEL_TEXT');
+    expect(JSON.stringify(out)).not.toContain('PRIVATE_SENTINEL');
     expect(out.text).not.toContain('正文已按');
   });
   it('合法0条与越过末页分别说明', async () => {
@@ -198,7 +198,7 @@ describe('SCOD：simulated离线契约与反例', () => {
     expect(urls[0]).toContain('length=50');
   });
   it('上游错误不冒充查无、原错误文本不透出', async () => {
-    const http = (async (url: string) => { throw new UpstreamError('/private/path contact@example.com', { url, status: 404, bodySnippet: 'SENTINEL_TEXT' }); }) as Fetcher;
+    const http = (async (url: string) => { throw new UpstreamError('/private/path contact@example.com', { url, status: 404, bodySnippet: 'PRIVATE_SENTINEL' }); }) as Fetcher;
     try { await geneRegion.run(args, { http }); throw new Error('unexpected success'); }
     catch (e) {
       expect(e).toBeInstanceOf(UpstreamError);

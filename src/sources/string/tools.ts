@@ -703,12 +703,12 @@ export const interactionPartners: ToolDefinition = {
     const renderScore = (v: number | undefined): string => (v === undefined ? MISSING : v.toFixed(3));
 
     /**
-     * **可对账的四项**（输出上限对账：不许只给一堆边而不说完整性）。
+     * **可对账的四项**（SB-10：不许只给一堆边而不说完整性）。
      *
      * 取尽判据只有一条：`returned < requestedLimit`。此时上游已把该条件下的伙伴全部返回，
      * `total = returned` 是**实测到边界**的结果；`returned === requestedLimit` 时上游没有
      * 总数可比，只能写 `total = null` + `has_more = true`——**绝不拿请求上限冒充总数**
-     * （这正是 输出上限对账 的病根：旧 raw 把"本次取回"写成 `total`，草莓两套跑据此把
+     * （这正是 SB-10 的病根：旧 raw 把"本次取回"写成 `total`，草莓两套跑据此把
      * 1,797 / 1,814 当成"总数"，而真实可用条数上游从未给过）。
      */
     const returned = partners.length;

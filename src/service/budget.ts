@@ -1,5 +1,5 @@
 /**
- * 启动期预算门禁（2026-10-31 口径）。
+ * 启动期预算门禁（**AGENTS.md v2.3「源市场制」口径，2026-10-31**）。
  *
  * 口径变了，语义也跟着变——不是"把 40 改成 80"：
  *
@@ -11,7 +11,8 @@
  * - 工具名长度仍是**硬约束**：宿主对 `mcp__<server>__<tool>` 有 64 字符上限，
  *   超出会被静默截断加哈希、已发布契约作废。这是宿主约束，不是我们的预算。
  *
- * 旧口径（源 ≤ 20、工具 ≤ 40、超了拒绝启动）已废止；规则、`stats`、启动门禁三处必须同源。
+ * 旧口径（源 ≤ 20、工具 ≤ 40、超了拒绝启动）已废止；`src/service/budget.ts` 的
+ * 20/40 硬拦曾与规则不同步——规则、`stats`、启动门禁三处必须同源（v2.3 §10.3）。
  */
 
 import type { ToolRegistry } from '../core/registry.js';
@@ -25,7 +26,8 @@ export const DEFAULT_SET_TOOLS_SOFT_MAX = 40;
 /**
  * **默认推荐集的源清单**（默认集口径的唯一来源）。
  *
- * 当前默认集列出全部 11 个源——清单外的源会被 `defaultSetToolCount()` 排除，
+ * 2026-11-07 P1「契约单一真相」（D2=A）：0.1.2 的默认集**暂保持全库 42 工具**，
+ * 因此清单必须列出全部 11 个源——清单外的源会被 `defaultSetToolCount()` 排除，
  * 那样 `/catalog` 的读数就会与不带订阅头时实际下发的 `tools/list` 再次分叉。
  *
  * 2026-11-03 的后端决定仍然有效，但属于 0.2.0（P2b，D1=A）：真过滤到 7 源 / 35 工具，
@@ -99,11 +101,21 @@ export interface BudgetReport {
   readonly tools: number;
   /** 其中的元工具数（如检索层入口）；metaTools ⊆ tools */
   readonly metaTools: number;
-  /** 默认推荐集（按 `DEFAULT_SET_SOURCES` 清单算）的工具数；**不等于全库** */
+  /**
+   * **默认会话实际下发**的工具数。
+   * 按需展开开启时 = `metaTools`（2）；回滚时 = 按 `DEFAULT_SET_SOURCES` 清单算的默认集（49）。
+   * 它不再等于全库；全库规模看 `catalogTools`。
+   */
   readonly defaultSetTools: number;
+  /** 目录全量工具数（= tools）；与默认下发行分开报 */
+  readonly catalogTools: number;
+  /** 还能按需展开的业务工具数 = catalogTools − defaultSetTools（回滚恒为 0） */
+  readonly expandableTools: number;
+  /** 本服务是否按需展开模式（决定启动日志/`/healthz` 的读数语义） */
+  readonly onDemand: boolean;
   /** 每个工具名在规则前缀下的可用字符预算 */
   readonly nameBudget: number;
-  /** 默认推荐集是否超过软建议（只警示，不影响启动） */
+  /** 默认下发集是否超过软建议（只警示，不影响启动） */
   readonly warnings: readonly string[];
   readonly subsetToolsHardMax: number;
   readonly defaultSetToolsSoftMax: number;
@@ -112,11 +124,15 @@ export interface BudgetReport {
 /**
  * 启动期校验：**只拦宿主硬约束**（工具名长度），全库数量一律不拦。
  *
- * 默认集超 40 记一条 warning，交给调用方展示（`/healthz`、日志），**不抛错**。
+ * 默认下发集超 40 记一条 warning，交给调用方展示（`/healthz`、日志），**不抛错**。
+ *
+ * @param onDemand 按需展开开关。不传 = 开启（产品默认）；回滚演练必须显式传 false，
+ *                 否则"忘了传"会把 49 的读数伪装成默认读数。
  */
-export function assertBudget(registry: ToolRegistry, serverName: string): BudgetReport {
+export function assertBudget(registry: ToolRegistry, serverName: string, onDemand = true): BudgetReport {
   const sources = registry.listSources().length;
   const tools = registry.listTools();
+  const metaTools = registry.listMetaTools().length;
   const problems: string[] = [];
 
   // 宿主前缀截断是硬约束：名字不可预测就等于契约作废，这个仍然拒绝启动。
@@ -132,19 +148,24 @@ export function assertBudget(registry: ToolRegistry, serverName: string): Budget
   if (problems.length > 0) throw new BudgetError(problems);
 
   const warnings: string[] = [];
-  const defaultSetTools = defaultSetToolCount(registry);
+  const catalogTools = tools.length;
+  const defaultSetTools = onDemand ? metaTools : defaultSetToolCount(registry);
+  const expandableTools = onDemand ? Math.max(0, catalogTools - defaultSetTools) : 0;
   if (defaultSetTools > DEFAULT_SET_TOOLS_SOFT_MAX) {
     warnings.push(
-      `默认推荐集 ${defaultSetTools} 个工具，超过软建议 ${DEFAULT_SET_TOOLS_SOFT_MAX}（不拒绝启动）；`
+      `默认下发 ${defaultSetTools} 个工具，超过软建议 ${DEFAULT_SET_TOOLS_SOFT_MAX}（不拒绝启动）；`
       + '32K 级上下文会明显拥挤，建议用户按需订阅，或按默认集取舍（v2.3 §10.2）',
     );
   }
 
   return {
     sources,
-    tools: tools.length,
-    metaTools: registry.listMetaTools().length,
+    tools: catalogTools,
+    metaTools,
     defaultSetTools,
+    catalogTools,
+    expandableTools,
+    onDemand,
     nameBudget,
     warnings,
     subsetToolsHardMax: SUBSET_TOOLS_HARD_MAX,

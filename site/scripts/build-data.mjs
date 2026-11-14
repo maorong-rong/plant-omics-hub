@@ -266,7 +266,7 @@ async function main() {
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 
   /* web/ 的选源页仍需要一份带 sources 的数据（它要按源算订阅集），那份留在 web/data/catalog.js。
-     site/ 的快照**只留不漂的东西**：
+     site/ 的快照（FE-09，2026-11-03 由后端负责人提出、前端负责人定）**只留不漂的东西**：
      身份、构建时刻、包版本、人工文案与发布事实。源清单 / 工具数 / 等级 / 预算一律不进来——
      页面运行时向 `GET /catalog` 取，仓库里不再维护第二份数据。 */
   const fullCatalog = {
@@ -288,7 +288,7 @@ async function main() {
     gitCommit: fullCatalog.gitCommit,
     package: fullCatalog.package,
     build: fullCatalog.build,
-    note: '本文件不含源清单与任何数字：落地页运行时向 GET /catalog 取。',
+    note: '本文件不含源清单与任何数字：落地页运行时向 GET /catalog 取。见 site/README.md §2。',
   };
 
   mkdirSync(OUT_DIR, { recursive: true });

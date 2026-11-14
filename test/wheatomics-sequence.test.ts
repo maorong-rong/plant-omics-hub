@@ -134,9 +134,9 @@ describe('WheatOmics仅基因序列分块（全离线）', () => {
   });
   it('raw和文本不输出附加字段、未选序列或FASTA自由头', async () => {
     const p = synthetic('ACGT');
-    p.gene_sequence = `>${id}.1 SENTINEL_TEXT\nACGT`;
-    const out = await geneSequence.run({ gene_id: id }, context({ ...p, additional_sequences: 'SENTINEL_TEXT', private: 'SENTINEL_TEXT', protein_sequence: 'SENTINEL_TEXT' }).ctx);
-    expect(JSON.stringify(out)).not.toContain('SENTINEL_TEXT');
+    p.gene_sequence = `>${id}.1 PRIVATE_SENTINEL\nACGT`;
+    const out = await geneSequence.run({ gene_id: id }, context({ ...p, additional_sequences: 'PRIVATE_SENTINEL', private: 'PRIVATE_SENTINEL', protein_sequence: 'PRIVATE_SENTINEL' }).ctx);
+    expect(JSON.stringify(out)).not.toContain('PRIVATE_SENTINEL');
   });
   it('蛋白终止符不冒充氨基酸残基，明确计数口径', async () => {
     const out = await geneSequence.run({ gene_id: id, sequence_type: 'protein' }, context(synthetic('MGR*', 'protein')).ctx);

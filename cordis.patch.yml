@@ -28,6 +28,6 @@
       config:
         serverName: plantomics-hub
         transport: streamable-http
-        url: !!js "process.env.PLANTOMICS_HUB_URL || 'http://127.0.0.1:8971/mcp'"
+        url: !!js "process.env.PLANTOMICS_HUB_URL || 'http://127.0.0.1:8787/mcp'"
         headers: !!js "process.env.PLANTOMICS_HUB_TOKEN ? { authorization: 'Bearer ' + process.env.PLANTOMICS_HUB_TOKEN } : {}"
         failOnStartupError: true

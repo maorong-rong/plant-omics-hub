@@ -5,15 +5,23 @@ coverage/
 *.tsbuildinfo
 *.tgz
 
-# AI 助手与会话的本地配置
+# 内部工作记录与规划（保留本机文件，不对外发布）
+/记录/
+/00_工作区总览.md
+/AGENTS.md
+/docs/规划草案.md
+
+# AI 助手的本地规则、记忆与会话配置
 /.agents/
 /.claude/
 /.codex/
 /.dsh/
+/_bots/
+/skills/
 /.mcp.json
 /mcp.local.json
 
-# 本地探测结果与临时文件
+# 本机探测结果与临时文件
 probe-report.json
 *.log
 .env

@@ -9,7 +9,7 @@
     "simulated": false,
     "cropping": "verbatim; no fields removed (all lookup fields described by upstream are job-relevant)",
     "client": "curl 8.x (schannel) via PowerShell, --connect-timeout 40",
-    "duplicatedBy": "已撤回：sequence 两次抓取长度相同但 seq 内容不同；本件仅代表单次抓取",
+    "duplicatedBy": "已撤回：sequence 两次抓取长度相同但 seq 内容不同（见 记录/20261030-更正-Ensembl序列两次抓取内容不一致.md）；本件仅代表单次抓取",
     "firstCommittedAt": "2026-10-30T16:22:44+08:00",
     "firstCommittedNote": "git log --diff-filter=A 实测首次入库时间，仅作入库留痕，不替代抓取时刻",
     "captureTimeStatus": "未知",

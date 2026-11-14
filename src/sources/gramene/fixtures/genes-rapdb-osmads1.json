@@ -6,7 +6,7 @@
     "originalBytes": 23316,
     "contentType": "application/json; charset=utf-8",
     "trimmed": "删除 xrefs（外部交叉引用，占响应主体）与 gene_idx；_id/name/description/biotype/taxon_id/system_name/db_type/location/gene_structure 原样保留",
-    "note": "阳性对照：OsMADS1/LHS1 的 RAP-DB Os03g0215400（同一基因的 MSU LOC_Os03g11614 在 genes-msu-zero.json 回 0 条）。证明回 0 是 ID 空间不认，不是物种里没有这个基因"
+    "note": "阳性对照：OsMADS1/LHS1 的 RAP-DB Os03g0215400（文献对号见 analysis/rice-mads/results/literature.arora2007.tsv；同一基因的 MSU LOC_Os03g11614 在 genes-msu-zero.json 回 0 条）。证明回 0 是 ID 空间不认，不是物种里没有这个基因"
   },
   "payload": [
     {

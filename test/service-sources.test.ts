@@ -48,9 +48,24 @@ function fixtureRouter(routes: Array<{ match: string; file: string }>) {
   };
 }
 
+/**
+ * 静态全量模式起服务：这组用例测的是**业务工具经 HTTP 运输层回放**，
+ * 不是按需展开；按需展开下业务工具默认不在 tools/list 里（要先 hub_find_sources 展开），
+ * 直接调会被服务端拒绝。按需展开本身由 test/on-demand-*.test.ts 与验收脚本覆盖。
+ */
+const STATIC_ON_DEMAND = {
+  enabled: false,
+  notify: true,
+  perCallMax: 5,
+  softMax: 40,
+  hardMax: 80,
+  sessionTtlMs: 1_800_000,
+  sessionMax: 64,
+} as const;
+
 async function startService() {
   const config = parseServiceConfig({ PLANTOMICS_HUB_HOST: '127.0.0.1', PLANTOMICS_HUB_PORT: '0' } as NodeJS.ProcessEnv);
-  const instance = await createService({ registry, config }).start();
+  const instance = await createService({ registry, config, onDemand: STATIC_ON_DEMAND }).start();
   running.push(instance);
   const client = new Client({ name: 'six-source-replay', version: '1.0.0' });
   clients.push(client);

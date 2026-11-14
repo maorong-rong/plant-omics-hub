@@ -1,5 +1,5 @@
 /**
- * InterPro / Pfam HMM 出口（参考数据集出口，第 11 源）。
+ * InterPro / Pfam HMM 出口（issue #73 §1.1，第 11 源）。
  *
  * 语义：按 Pfam accession 取**域模型 HMM 正文**，落盘缓存，返回 accession 规范化结果、
  * InterPro 版本、md5、取数时间与缓存路径。HMM 是几十 KB 的文本，**正文预算只有 1,408 B**，
@@ -33,7 +33,7 @@ const TIMEOUT_MS = 30_000;
 const MAX_ATTEMPTS = 3;
 const BACKOFF_MS = [400, 1_200];
 
-/** A 套2026-11-10 实测的 PF00319 HMM 正文 md5；只对这一个 accession 有历史基线。 */
+/** A 套（#70）2026-11-10 实测的 PF00319 HMM 正文 md5；只对这一个 accession 有历史基线。 */
 export const PF00319_BASELINE_MD5 = '19621ce1a6c9222d748f60b6e8ff5e37';
 
 export interface HmmAccession {

@@ -14,7 +14,7 @@
 #   powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "<本脚本完整路径>"
 
 param(
-  [int]$Port = 8971,
+  [int]$Port = 8787,
   [string]$Profile = 'desktop'
 )
 
@@ -42,7 +42,7 @@ Write-Host ""
 $inUse = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
 if ($inUse) {
   Write-Host "[plantomics-hub] 端口 $Port 已被占用（PID $($inUse[0].OwningProcess)）。" -ForegroundColor Yellow
-  Write-Host "  换个端口重试：-Port 8972"
+  Write-Host "  换个端口重试：-Port 8788"
   Write-Host "  注意：换端口后插件里的 PLANTOMICS_HUB_URL 也要指向新地址，否则宿主连不上。"
   exit 1
 }
