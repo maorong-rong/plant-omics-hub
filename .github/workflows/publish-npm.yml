@@ -83,7 +83,9 @@ jobs:
           set -o pipefail
           npm publish --provenance --access public --loglevel=verbose 2>&1 | tee "$RUNNER_TEMP/publish.log"
 
-      - name: 失败时把发布日志写进摘要
+      # 失败时同时写摘要与 **check annotation**：Actions 日志需要 actions:read，
+      # 部署令牌读不到；annotation 走 checks API 就能直接看到 npm 的报错原文。
+      - name: 失败时把发布日志写进摘要与 annotation
         if: failure()
         run: |
           {
@@ -92,6 +94,14 @@ jobs:
             tail -n 80 "$RUNNER_TEMP/publish.log" 2>/dev/null || echo '(没有日志文件)'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$RUNNER_TEMP/publish.log" ]; then
+            tail -n 10 "$RUNNER_TEMP/publish.log" | while IFS= read -r line; do
+              # % 是 workflow command 的转义符，先转义再输出
+              echo "::error::$(printf '%s' "$line" | sed 's/%/%25/g; s/\r//g')"
+            done
+          else
+            echo "::error::publish.log 不存在：失败发生在 npm publish 之前"
+          fi
 
       # 发布成功后独立核对 attestation 是否真的存进了 registry：
       # registry 的 attestation 是**异步落库**的，所以做有界轮询（60 × 10 s = 10 分钟），
