@@ -1,0 +1,119 @@
+# 通过 npm Trusted Publishing（OIDC）发布到 npm，不需要 NPM_TOKEN。
+#
+# 2026-11-14 起发布源是**公开仓** plant-omics-hub：本文件在公开仓直建，
+# 导出快照时由私有仓 scripts/publish-public.mjs 的 KEEP_FROM_BASE 保留（本地没有也不会被删）。
+#
+# 前置条件（缺一即失败，且失败信息不一定直白）：
+#   1. npm 上已存在 plantomics-hub 这个包（本 workflow 不能用于首包发布）；
+#   2. npmjs.com 包设置页已把 Trusted Publisher 绑到 maorong-rong / plant-omics-hub /
+#      publish-npm.yml（文件名必须与本文件完全一致）；
+#   3. Allowed actions 里勾选允许 npm publish（默认只允许 npm stage publish）；
+#   4. 仓库必须是 public，否则 provenance 不成立（当前已满足）；
+#   5. runner 必须是 GitHub 托管，自托管 runner 官方明确不支持。
+#
+# 若 OIDC 一时配不通，可按作者授权临时去掉 `--provenance` 与 provenance 核对步骤先把版本发出去，
+# 但必须在 CHANGELOG 对应版本段写明「本次未附 provenance，原因、后续版本补」。
+
+name: publish-npm
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write # OIDC 换取发布凭据，无需 NPM_TOKEN
+
+jobs:
+  publish:
+    # 防止 fork 或误推到别的仓库时触发发布
+    if: github.repository == 'maorong-rong/plant-omics-hub'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0' # Trusted Publishing 官方下限，不写浮动的 22
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+
+      # Node 22.14.0 自带 npm 为 10.x，低于 Trusted Publishing 要求的 11.5.1。
+      # 固定 11.9.0，不用 npm@latest：latest 已是 12.x，其 engines 要求
+      # Node ^22.22.2 / ^24.15.0 / >=26，在本 runner 上会 EBADENGINE 直接失败。
+      - name: 升级 npm 到 11.5.1 以上
+        run: |
+          npm install -g npm@11.9.0
+          npm --version
+          node -e '
+            const v = process.argv[1].split(".").map(Number);
+            const ok = v[0] > 11 || (v[0] === 11 && (v[1] > 5 || (v[1] === 5 && v[2] >= 1)));
+            if (!ok) { console.error("npm " + process.argv[1] + " < 11.5.1，不满足 Trusted Publishing 要求"); process.exit(1); }
+          ' "$(npm --version)"
+
+      - run: npm ci
+
+      # package.json 的 files 只含 dist 等少数条目，不先构建就会发一个没有 dist 的空包
+      - run: npm run check
+
+      - name: 校验 tag 与 package.json 版本一致
+        run: |
+          tag="${GITHUB_REF#refs/tags/v}"
+          ver="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$ver" ]; then
+            echo "tag=$tag 与 package.json version=$ver 不一致，拒绝发布"; exit 1
+          fi
+
+      # 重跑保护：npm 版本不可重用。若上一次 run 已经把包发出去、却卡在后面的 attestation
+      # 核对而红，重跑时不能再 publish 一次（会 "cannot publish over"）。
+      - name: 检查该版本是否已在 registry（仅重跑恢复用）
+        id: already_published
+        run: |
+          ver="$(node -p "require('./package.json').version")"
+          if npm view "plantomics-hub@$ver" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "registry 上已有 plantomics-hub@$ver：跳过 publish，仅核对 provenance"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 发布到 npm
+        if: steps.already_published.outputs.exists != 'true'
+        run: |
+          set -o pipefail
+          npm publish --provenance --access public --loglevel=verbose 2>&1 | tee "$RUNNER_TEMP/publish.log"
+
+      - name: 失败时把发布日志写进摘要
+        if: failure()
+        run: |
+          {
+            echo '### npm publish 失败，最后 80 行'
+            echo '```'
+            tail -n 80 "$RUNNER_TEMP/publish.log" 2>/dev/null || echo '(没有日志文件)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 发布成功后独立核对 attestation 是否真的存进了 registry：
+      # registry 的 attestation 是**异步落库**的，所以做有界轮询（60 × 10 s = 10 分钟），
+      # 检查力度不降：最终仍要求 HTTP 200 且条目非空。
+      - name: 核对 provenance 已附上（有界轮询 registry）
+        run: |
+          ver="$(node -p "require('./package.json').version")"
+          url="https://registry.npmjs.org/-/npm/v1/attestations/plantomics-hub@$ver"
+          code=000
+          for attempt in $(seq 1 60); do
+            code="$(curl -s -o "$RUNNER_TEMP/attest.json" -w '%{http_code}' "$url")"
+            echo "attestations 第 ${attempt}/60 次：HTTP $code"
+            if [ "$code" = "200" ]; then break; fi
+            sleep 10
+          done
+          if [ "$code" != "200" ]; then
+            echo "provenance 缺失：$url 轮询 10 分钟后仍返回 $code"; exit 1
+          fi
+          node -e '
+            const a = require(process.argv[1]);
+            if (!Array.isArray(a.attestations) || a.attestations.length === 0) {
+              console.error("attestation 文档里没有条目"); process.exit(1);
+            }
+            console.log("attestations=" + a.attestations.length);
+          ' "$RUNNER_TEMP/attest.json"
