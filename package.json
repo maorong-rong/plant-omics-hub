@@ -105,12 +105,12 @@
     "name": "maorong-rong",
     "email": "299401268+maorong-rong@users.noreply.github.com"
   },
-  "homepage": "https://github.com/maorong-rong/plant-omics#readme",
+  "homepage": "https://github.com/maorong-rong/plant-omics-hub#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/maorong-rong/plant-omics.git"
+    "url": "git+https://github.com/maorong-rong/plant-omics-hub.git"
   },
   "bugs": {
-    "url": "https://github.com/maorong-rong/plant-omics/issues"
+    "url": "https://github.com/maorong-rong/plant-omics-hub/issues"
   }
 }
