@@ -1,0 +1,27 @@
+name: hostcheck
+
+# 一次性验证：索引 URL 必须 2xx、无重定向。用 GitHub 托管 runner 的网络出口，
+# 避免本地环境到 raw.githubusercontent.com 的 egress 限制。验证完即删除。
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hostcheck.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: curl market index
+        run: |
+          url="https://raw.githubusercontent.com/maorong-rong/plant-omics-hub/main/market/index.json"
+          code="$(curl -sIL -o /tmp/h -w '%{http_code}' "$url")"
+          n="$(grep -ci '^location:' /tmp/h || true)"
+          loc="$(grep -i '^location:' /tmp/h | head -1 || true)"
+          echo "::notice::raw_index code=$code redirects=$n location=${loc:-none}"
+          echo "code=$code redirects=$n location=${loc:-none}"
+          test "$code" = "200"
+          test "$n" = "0"
