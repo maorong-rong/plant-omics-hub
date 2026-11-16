@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
   "scope": "published",
-  "generatedAt": "2026-11-07T13:07:20.377Z",
-  "gitCommit": "903e580",
+  "generatedAt": "2026-11-16T06:42:27.855Z",
+  "gitCommit": "1646196",
   "installed": {
-    "spec": "plantomics-hub@0.1.2",
-    "tarball": "https://registry.npmjs.org/plantomics-hub/-/plantomics-hub-0.1.2.tgz",
-    "integrity": "sha512-vujnG5AnD1qLkxLGD1f7ieMW+Rleej7htoYIueGdY4tTdHEp2GIvsq2weWi921Im1VvcRST87Eg+zLVdoeR8mQ==",
-    "latest": "0.1.2",
-    "builtFrom": "903e580",
-    "builtAt": "2026-11-07T21:03:43+08:00"
+    "spec": "plantomics-hub@0.2.2",
+    "tarball": "https://registry.npmjs.org/plantomics-hub/-/plantomics-hub-0.2.2.tgz",
+    "integrity": "sha512-i2gyMllYSypjqiEAmuJrAJXWNpER4pTmbmM6r5fWb3+DoeqLs5aDOIsGaCfPbxw6el6oVBjFvI7dJj/jMp7Zqw==",
+    "latest": "0.2.2",
+    "builtFrom": "62673fd",
+    "builtAt": "2026-11-16T14:32:05+08:00"
   },
   "counts": {
-    "sources": 10,
-    "tools": 41,
-    "sourceTools": 39,
+    "sources": 11,
+    "tools": 49,
+    "sourceTools": 47,
     "metaTools": 2
   },
   "sourceIds": [
@@ -27,7 +27,8 @@
     "scod",
     "ensemblplants",
     "string",
-    "uniprot"
+    "uniprot",
+    "interpro"
   ],
   "namedCrops": [
     "小麦",
@@ -39,8 +40,8 @@
     "橡胶蒲公英"
   ],
   "description": {
-    "en": "10 plant-omics databases behind 41 MCP tools, covering wheat, rice, maize, strawberry, sugarcane and more. Thin plugin plus a remote MCP service; every output carries full provenance.",
-    "zh": "10 个植物组学数据库、41 个 MCP 工具，覆盖小麦、水稻、玉米、草莓、甘蔗等。薄插件 + 远程 MCP 服务，输出带完整出处尾注。"
+    "en": "ships 2 tools by default and expands 47 more on demand, covering wheat, rice, maize, strawberry, sugarcane and more. 11 plant-omics databases; every output carries full provenance and version anchors.",
+    "zh": "默认会话只下发 2 个工具，按需展开 47 个业务工具，覆盖小麦、水稻、玉米、草莓、甘蔗等。跨 11 个植物组学数据库，输出带完整出处与版本锚。"
   },
   "note": "本文件由 market/scripts/build-copy.mjs 生成（发布口径，联网解包 npm tarball），勿手改。"
 }

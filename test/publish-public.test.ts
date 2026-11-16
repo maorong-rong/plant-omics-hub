@@ -8,12 +8,15 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error 独立 CLI 脚本，无声明文件
 import {
   EXCLUDED_PATHS,
+  PUBLIC_PACKAGE_METADATA,
   PUBLISH_DEPLOY_FILES,
   checkDeployNoPublicIp,
   checkDeploySnapshot,
+  checkPublicPackageJson,
   parseArgs,
   renderPublishMd,
   resolveRemote,
+  rewritePublicPackageJson,
   whitelist,
 } from '../scripts/publish-public.mjs';
 
@@ -122,6 +125,29 @@ describe('publish-public 白名单：内部看板与评测私有产物不进公�
     // 用户文档必须留下：README 链接的架构/机制文档不能因排除研究目录而消失
     expect(kept).toContain('docs/架构.md');
     expect(kept).toContain('docs/机制说明.md');
+  });
+
+  it('2026-11-16：导出的 package.json 必须重写为公开仓元数据（provenance 会核对）', () => {
+    const source = JSON.stringify({
+      name: 'plantomics-hub',
+      version: '0.2.2',
+      repository: { type: 'git', url: 'git+https://github.com/maorong-rong/plant-omics.git' },
+      homepage: 'https://github.com/maorong-rong/plant-omics#readme',
+      bugs: { url: 'https://github.com/maorong-rong/plant-omics/issues' },
+    });
+    // 负控：私有仓字段必须被判为不合格
+    expect(checkPublicPackageJson(JSON.parse(source)).length).toBe(3);
+
+    const { pkg, text } = rewritePublicPackageJson(source) as {
+      pkg: Record<string, any>;
+      text: string;
+    };
+    expect(pkg.repository.url).toBe(PUBLIC_PACKAGE_METADATA.repositoryUrl);
+    expect(pkg.homepage).toBe(PUBLIC_PACKAGE_METADATA.homepage);
+    expect(pkg.bugs.url).toBe(PUBLIC_PACKAGE_METADATA.bugsUrl);
+    expect(pkg.version).toBe('0.2.2');
+    expect(checkPublicPackageJson(pkg)).toEqual([]);
+    expect(JSON.parse(text).repository.url).toBe(PUBLIC_PACKAGE_METADATA.repositoryUrl);
   });
 
   // 负控用的 `loadPatched` 在文件末尾的模块作用域定义（多个 describe 共用）。

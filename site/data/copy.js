@@ -1,15 +1,15 @@
 /* 由 site/scripts/build-data.mjs 生成，勿手改。只含人工文案与发布事实；不含当前服务的源数/工具数，published 下是已发布包的快照数字（随 npm 发布由生成器重算）。 */
 window.__PMH_COPY__ = {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-10T11:49:29.641Z",
+  "generatedAt": "2026-11-16T06:42:28.405Z",
   "package": {
     "name": "plantomics-hub",
-    "version": "0.1.2"
+    "version": "0.2.2"
   },
   "published": {
-    "spec": "plantomics-hub@0.1.2",
-    "sources": 10,
-    "tools": 41,
+    "spec": "plantomics-hub@0.2.2",
+    "sources": 11,
+    "tools": 49,
     "metaTools": 2,
     "sourceIds": [
       "wheatomics",
@@ -21,16 +21,11 @@ window.__PMH_COPY__ = {
       "scod",
       "ensemblplants",
       "string",
-      "uniprot"
+      "uniprot",
+      "interpro"
     ],
-    "missingSources": [
-      {
-        "id": "interpro",
-        "name": "InterPro/Pfam 蛋白域模型库（EMBL-EBI）",
-        "nameEn": "InterPro/Pfam — protein domain models (EMBL-EBI)"
-      }
-    ],
-    "snapshotAt": "2026-11-07T13:07:20.377Z"
+    "missingSources": [],
+    "snapshotAt": "2026-11-16T06:42:27.855Z"
   },
   "labels": {
     "strawberry": {

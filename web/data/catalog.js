@@ -1,16 +1,16 @@
 /* 由 site/scripts/build-data.mjs 生成，勿手改。源：dist/ 注册表。 */
 window.__PLANTOMICS_CATALOG__ = {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-10T11:49:29.641Z",
-  "gitCommit": "c983284",
+  "generatedAt": "2026-11-16T06:42:28.405Z",
+  "gitCommit": "1646196",
   "package": {
     "name": "plantomics-hub",
-    "version": "0.1.2"
+    "version": "0.2.2"
   },
   "build": {
-    "sourceRev": "c983284",
-    "builtAt": "2026-11-10T19:48:57+08:00",
-    "packageVersion": "0.1.2",
+    "sourceRev": "1646196",
+    "builtAt": "2026-11-16T14:41:36+08:00",
+    "packageVersion": "0.2.2",
     "dirty": false
   },
   "budget": {
@@ -23,9 +23,9 @@ window.__PLANTOMICS_CATALOG__ = {
     "T3": 0
   },
   "published": {
-    "spec": "plantomics-hub@0.1.2",
-    "sources": 10,
-    "tools": 41,
+    "spec": "plantomics-hub@0.2.2",
+    "sources": 11,
+    "tools": 49,
     "metaTools": 2,
     "sourceIds": [
       "wheatomics",
@@ -37,16 +37,11 @@ window.__PLANTOMICS_CATALOG__ = {
       "scod",
       "ensemblplants",
       "string",
-      "uniprot"
+      "uniprot",
+      "interpro"
     ],
-    "missingSources": [
-      {
-        "id": "interpro",
-        "name": "InterPro/Pfam 蛋白域模型库（EMBL-EBI）",
-        "nameEn": "InterPro/Pfam — protein domain models (EMBL-EBI)"
-      }
-    ],
-    "snapshotAt": "2026-11-07T13:07:20.377Z"
+    "missingSources": [],
+    "snapshotAt": "2026-11-16T06:42:27.855Z"
   },
   "sources": [
     {
@@ -84,7 +79,7 @@ window.__PLANTOMICS_CATALOG__ = {
         },
         {
           "name": "strawberry_gene_lookup",
-          "summary": "精确查询草莓及相关病原的基因注释、响应自身物种与装配版本及蛋白长度，不做模糊搜索。species/version请用catalog或状态目录的原字符串；ID最多256码点，species/version各512。includeSequence默认false；只展示最多120 aa的非完整蛋白前缀，不能用于完整序列分析或下载。"
+          "summary": "精确查询草莓及相关病原的基因注释、响应自身物种与装配版本及蛋白长度，不做模糊搜索。species/version请用catalog或状态目录的原字符串；ID最多256码点，species/version各512。includeSequence默认false；只展示最多120 aa的非完整蛋白前缀，不能用于完整序列分析或下载。上游geneOntology是混合字段（IPR条目 + eggNOG-mapper的GO术语）；正文与结构化输出分开标IPR和GO，并显式声明无全基因组GO背景表、namespace未知，因此不做GO富集。"
         },
         {
           "name": "strawberry_expression",
@@ -92,7 +87,7 @@ window.__PLANTOMICS_CATALOG__ = {
         },
         {
           "name": "strawberry_synteny",
-          "summary": "查询已证实草莓装配间的基因共线区块；geneId/sourceAssembly/targetAssembly必填，各最多256码点，装配ID来自状态目录而不是物种名。maxBlocks为本地展示上限1–10默认5。保留分析ID、源/目标装配、总块数和上游截断标记；不宣称病原全覆盖，共线不等于一对一正交或功能等价。"
+          "summary": "查询已证实草莓装配间的基因共线区块；geneId/sourceAssembly/targetAssembly必填，各最多256码点，装配ID来自状态目录而不是物种名。maxBlocks为本地展示上限1–10默认5。保留分析ID、源/目标装配、总块数和上游截断标记；不宣称病原全覆盖，共线不等于一对一正交或功能等价。共线块为空时返回带zero_reason的结构化零值诊断，正文保留端点/HTTP状态/耗时，只记「本次未取到」。"
         },
         {
           "name": "strawberry_tf_members",
@@ -153,7 +148,7 @@ window.__PLANTOMICS_CATALOG__ = {
         },
         {
           "name": "wheatomics_expression_query",
-          "summary": "查一个或多个小麦基因在指定表达谱项目里的表达量：**均值 ± 标准差**，按表达量降序给最高的若干个条件。当用户问「这个基因在哪些组织/处理下高表达」时用。已给出具体条件名（如 grain）时传 condition 只看那类条件；project 不填则用上游默认项目，建议先用 wheatomics_expression_projects 选项目。注意：表达值单位随项目而定，上游未逐点标注，**跨项目不可直接比较大小**。"
+          "summary": "查一个或多个小麦基因在指定表达谱项目里的表达量：**均值 ± 标准差**，按表达量降序给最高的若干个条件。当用户问「这个基因在哪些组织/处理下高表达」时用。已给出具体条件名（如 grain）时传 condition 只看那类条件；project 不填则用上游默认项目，建议先用 wheatomics_expression_projects 选项目。**正文只给摘要；完整矩阵（行=基因、列=条件、逐点 mean/std/status）在 structuredContent**，不再受 4 KB 正文上限影响。status：measured=上游给了有限值；zero_or_unmeasured=value=0 且 std=0/未给——上游没有 missing 标记，**无法区分「测得 0」与「未测量」，按未知处理**，不许当 0 用；missing=该基因没有这个条件的点。注意：表达值单位随项目而定，上游未逐点标注，**跨项目不可直接比较大小**。"
         },
         {
           "name": "wheatomics_search_papers",
@@ -161,11 +156,11 @@ window.__PLANTOMICS_CATALOG__ = {
         },
         {
           "name": "wheatomics_convert_gene_ids",
-          "summary": "把小麦基因 ID 在不同注释版本间换算，统一转成上游所称的 02G（IWGSC v1.1）格式。支持 MIPS v2.2、TGACv1、IWGSC v1.0 三种源版本。当用户手里的 ID 是旧版本、要和 02G 数据对齐时用——版本不对齐是小麦数据分析最常见的静默错误源。注意：这只是 ID 表之间的映射，**不等于确认了参考组装版本**。"
+          "summary": "把小麦基因 ID 在不同注释版本间换算，统一转成上游所称的 02G（IWGSC v1.1）格式。两种模式：①给 `gene_version` 时走 ID 表（MIPS v2.2 / TGACv1 / IWGSC v1.0 → 02G）；②**不给 `gene_version` 时走 `/api/genes/resolve` 逐 ID 解析**（03G/02G→02G，最多 20 个 ID）——这是 03G 编号换 02G 的唯一上游通道（实测 03G 直查 PPI/GO 返回 0，就是编号代次问题）。01G 转录本 ID（带 `.1`）在 resolve 里 count=0，会自动回退到 IWGSCv1_result 表换算。**换算得到的是基因级 02G**：GO 富集按端点要求再补 `.1`（实测 02G+.1 有结果），PPI_poppin 带不带 `.1` 都行、PPI_result 需 01G 转录本 + `.1`。**上游只有 →02G 单向**：WheatOmics 站内没有 02G→01G 端点（id-conversion 反查 not_found、resolve 对 01G 返回 count=0）；官方 IWGSC v1.0↔v1.1 对应表在 URGI 存在，但本仓未接入、也不在工具里生成映射，标「未知/未实现」。注意：这只是 ID 表之间的映射，**不等于确认了参考组装版本**。"
         },
         {
           "name": "wheatomics_cross_species_homologs",
-          "summary": "把一个小麦基因映射到其他物种的同源基因（BLAST 比对结果，含 identity、覆盖度、E 值、得分），用于跨物种功能推断。当用户问「这个小麦基因在水稻/拟南芥里对应哪个基因」时用。**覆盖范围只有水稻与拟南芥**——实测返回的 species 是 Rice 与 Arabidopsis，不是全部物种，也不代表全部禾本科。注意：上游没有给出直系同源/旁系同源的分类字段，本工具**不区分 ortholog 与 paralog**，只报同源命中；max_targets 是**每个物种**的返回上限，不是总条数。查无返回\"本次返回 0 条\"，不代表该基因不存在。"
+          "summary": "把一个小麦基因映射到其他物种的同源基因（BLAST 比对结果，含 identity、覆盖度、E 值、得分），用于跨物种功能推断。当用户问「这个小麦基因在水稻/拟南芥里对应哪个基因」时用。**覆盖范围只有水稻与拟南芥**——实测返回的 species 是 Rice 与 Arabidopsis，不是全部物种，也不代表全部禾本科。注意：上游没有给出直系同源/旁系同源的分类字段，本工具**不区分 ortholog 与 paralog**，只报同源命中；max_targets 是**每个物种**的返回上限，不是总条数。查无返回\"本次返回 0 条\"，不代表该基因没有同源基因。"
         },
         {
           "name": "wheatomics_variant_datasets",
@@ -181,15 +176,15 @@ window.__PLANTOMICS_CATALOG__ = {
         },
         {
           "name": "wheatomics_ppi",
-          "summary": "查小麦蛋白-蛋白互作（PPI）边。`table=PPI_poppin`（默认）是 PoppIn 水稻互作网络转移到小麦 A/B/D 同源拷贝的结果，每条边带 `rice_pair`（底层水稻互作）、`supporting_edges`（支持边数）与 `identity1/2`（水稻→小麦映射 identity）；`table=PPI_result` 是 McWhite CF-MS 小麦复合物图，输入需 IWGSC RefSeq v1.1 转录本 ID 且带 `.1` 后缀。**正文只展示前 N 条，完整边在 structuredContent**；0 条不等于没有互作（两张表的收录范围不同）。本工具只返回上游已有的边，不推断方向、不把同源关系当互作。"
+          "summary": "查小麦蛋白-蛋白互作（PPI）边。`table=PPI_poppin`（默认）是 PoppIn 水稻互作网络转移到小麦 A/B/D 同源拷贝的结果，每条边带 `rice_pair`（底层水稻互作）、`supporting_edges`（支持边数）与 `identity1/2`（水稻→小麦映射 identity）；`table=PPI_result` 是 McWhite CF-MS 小麦复合物图，输入需 IWGSC RefSeq v1.1 转录本 ID 且带 `.1` 后缀。**上游 20 个基因/批实测 44.8 s（撞 45 s 单次上限），10 个/批 16.1 s；因此本工具按 `batch_size`（默认 10）分批查询，再按边去重合并**；逐批耗时与失败批次进正文与 structuredContent，部分批次失败会显式标 partial。**PPI_poppin 只认 02G 编号**（03G 直接查返回 0，不是\"没有互作\"）——03G 先用 wheatomics_convert_gene_ids 换算。**正文只展示前 N 条，完整边在 structuredContent**；0 条不等于没有互作（两张表的收录范围不同）。本工具只返回上游已有的边，不推断方向、不把同源关系当互作。"
         },
         {
           "name": "wheatomics_regulatory",
-          "summary": "查小麦基因的调控区档案（上游 regulatory 模块）：基因/转录本坐标、调控区（upstream 等）区间、motif 命中数、motif 数、最小 p 值与组装版本。**只返回汇总，不展开数百条 motif 命中明细**；坐标字段名是 start0/end0/tss0/tes0（0-based）。当用户问\"这个基因上游有哪些调控元件/motif 命中\"时用；需要逐条命中请回上游导出端点。"
+          "summary": "查小麦基因的调控区档案（上游 regulatory 模块）：基因/转录本坐标、调控区（upstream 等）区间、motif 命中数、motif 数、最小 p 值与组装版本。坐标字段名是 start0/end0/tss0/tes0（0-based）。**传 `hit_limit` 时再用 `/api/regulatory/gene/{id}/hits` 取 motif→target 明细**（motif id / motif 名 / 来源通道 motif_source / 坐标 / 链 / p 值 / 匹配序列），汇总计数照旧保留；上游该基因共 798 条命中，一次最多取 50 条，取的是上游按 p 值/命中顺序的首页。当用户问\"这个基因上游有哪些调控元件/motif 命中\"时用；03G 直接查上游 404（只认 02G）。"
         },
         {
           "name": "wheatomics_enrichment",
-          "summary": "对一组小麦基因做 GO 或 KEGG 通路富集（超几何检验 + Benjamini-Hochberg FDR）。`mode=go` 用 wheat_function.gene_go 背景；`mode=kegg` 走 gene_id→KO→pathway。输入是 IWGSC RefSeq v1.1（02G）基因 ID，例如 TraesCS1A02G045300.1。**这是 POST 端点**：实测 GO 约 23.5–26.0 s（4 个基因 / 12.6 KB），KEGG 约 0.5 s；本工具给 GO 45 s 单次超时、不自动重试。正文只展示 padj 最小的前 N 条，完整结果在 structuredContent；0 条显著不等于没有功能富集。"
+          "summary": "对一组小麦基因做 GO 或 KEGG 通路富集（超几何检验 + Benjamini-Hochberg FDR）。`mode=go` 用 wheat_function.gene_go 背景；`mode=kegg` 走 gene_id→KO→pathway。输入是 IWGSC RefSeq v1.1（02G）基因 ID，例如 TraesCS1A02G045300.1。**这是 POST 端点**：GO 4 基因实测 32.5 s、20 基因 33–39 s（50 基因会超），KEGG 约 0.5 s；本工具默认 45 s 单次超时、**不自动重试**，可用 `timeout_ms`（5–45 s）下调做快速失败。P/BH **全部是上游原值**，本工具不重算、不合并、不拼 padj。**`include_gene_hits=true` 时逐条目回查「哪些送检基因命中了该 GO/KEGG 条目」**（上游 /api/go/genes 或 /api/kegg/genes），明细进正文与 structuredContent.gene_hits。正文只展示 padj 最小的前 N 条，完整结果在 structuredContent；0 条显著不等于没有功能富集。"
         },
         {
           "name": "wheatomics_gene_annotation",
@@ -382,7 +377,7 @@ window.__PLANTOMICS_CATALOG__ = {
         },
         {
           "name": "gramene_gene",
-          "summary": "按精确文档 ID 列表取 Gramene 基因记录（这是 /genes 的 idList 入口，不是按名称检索）：名称、描述、类型、分类单元、物种系统名与位置。可选 include_structure=true 附带外显子坐标（start/end，相对基因模型起点、不是染色体坐标；上游给 strand/phase 时一并给出）与功能域起止（name/description/aa start/end）；正文每类只列前 8 条并写明“共 X 条，已展示 Y 条”，完整结构放在 structuredContent。默认 false，输出与旧版一致。单条原始响应约 8.5 KB（含 xrefs），本工具只输出裁剪后的关键字段、不返回 xrefs；查无是 200 + 空数组，不能据此断言 ID 不存在。"
+          "summary": "按精确文档 ID 列表取 Gramene 基因记录（这是 /genes 的 idList 入口，不是按名称检索）：名称、描述、类型、分类单元、物种系统名与位置。可选 include_structure=true 附带外显子坐标（start/end，相对基因模型起点、不是染色体坐标；上游给 strand/phase 时一并给出）与功能域起止（name/description/aa start/end）；正文每类只列前 8 条并写明“共 X 条，已展示 Y 条”，完整结构放在 structuredContent。默认 false，输出与旧版一致。单条原始响应约 8.5 KB（含 xrefs），本工具只输出裁剪后的关键字段、不返回 xrefs；查无是 200 + 空数组，不能据此断言记录不存在；回 0 时会给出 zero_reason 与输入 ID 空间诊断。"
         },
         {
           "name": "gramene_expression",
@@ -533,7 +528,7 @@ window.__PLANTOMICS_CATALOG__ = {
         },
         {
           "name": "string_interaction_partners",
-          "summary": "查一个**已解析的 STRING ID**（形如 3702.Q9SXZ2）的互作伙伴，给出综合置信度 score 与主要证据通道。当用户问“这个基因和谁互作”“有哪些实验/共表达证据”时用。**上游会自行解析基因名**：实测直接传 AT1G65480 也能返回 10 条互作，所以“必须先解析”不是接口要求。本仓仍要求传已解析的 stringId（如 3702.Q9SXZ2），**这是本仓策略、不是接口限制**：一是让尾注能留下“解析到了哪个 ID”的证据，二是让空结果可解释。传入 AT1G65480 这类原始编号会被本地拒绝（零请求），并给出去换成 ID 的具体做法；**不会返回空列表冒充“没有互作”**。身份核验方式：本地核对 `string_id` 的 taxon 前缀与 `species` 一致；形状合法但实际不存在的 ID 由上游 404 明确否定（不是空数组）。只支持已实测物种（3702 拟南芥、39947/4530 水稻 Japonica）；小麦/玉米基因级互作能力未验证。不返回网络图（体积不可控），不做富集分析，不返回逐条证据的全文。"
+          "summary": "查一个**已解析的 STRING ID**（形如 3702.Q9SXZ2）的互作伙伴，给出综合置信度 score 与主要证据通道。当用户问“这个基因和谁互作”“有哪些实验/共表达证据”时用。**正文与 raw 都给出可对账的四项**：`total`（该条件下上游可用的总数；上游不报且本次没取尽时为 `null`）、`returned`（本次上游实际返回的条数）、`has_more`（是否还有未取回的伙伴）、`next_step`（下一步怎么做）。**上游没有分页/游标**（实测 offset/skip/start/page/cursor 全被忽略、只回同一页），只支持可调 `limit`；需要完整邻域时传 `complete=true` 一次取全（默认 `false`，与旧行为一致）。**上游会自行解析基因名**：实测直接传 AT1G65480 也能返回 10 条互作，所以“必须先解析”不是接口要求。本仓仍要求传已解析的 stringId（如 3702.Q9SXZ2），**这是本仓策略、不是接口限制**：一是让尾注能留下“解析到了哪个 ID”的证据，二是让空结果可解释。传入 AT1G65480 这类原始编号会被本地拒绝（零请求），并给出去换成 ID 的具体做法；**不会返回空列表冒充“没有互作”**。身份核验方式：本地核对 `string_id` 的 taxon 前缀与 `species` 一致；形状合法但实际不存在的 ID 由上游 404 明确否定（不是空数组）。只支持已实测物种（3702 拟南芥、39947/4530 水稻 Japonica）；小麦/玉米基因级互作能力未验证。不返回网络图（体积不可控），不做富集分析，不返回逐条证据的全文。"
         }
       ],
       "pinned": false,

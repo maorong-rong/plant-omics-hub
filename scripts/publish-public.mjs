@@ -215,6 +215,44 @@ export function checkDeployNoPublicIp(entries) {
 const INTERNAL_LINK = /\[([^\]]+)\]\((?:\.\.\/)*(?:记录\/|\.archify\/|论文\/|AGENTS\.md|00_工作区总览\.md|docs\/协作分工\.md|docs\/任务看板\.md|deploy\/|analysis\/|explore\/|docs\/paper\/|docs\/figures\/|docs\/competitive\/|docs\/architecture\/|docs\/capability\/|docs\/species\/|web\/screenshots\/|site\/screenshots\/)[^)]*\)/g;
 export const STRIPPED_LINK_NOTE = '（私有仓记录，未公开）';
 
+/**
+ * 公开仓 package.json 的仓库元数据：**必须指向公开仓**。
+ *
+ * 为什么：npm provenance 会核对发布包的 `repository.url` 与构建来源仓库。
+ * 2026-11-16 实测：导出快照沿用私有仓字段时，`npm publish` 报
+ * `422 ... package.json "repository.url" is "...plant-omics.git", expected to match
+ * "...plant-omics-hub" from provenance`。所以导出时统一改写，并在最终树上读回断言。
+ */
+export const PUBLIC_PACKAGE_METADATA = {
+  repositoryUrl: 'git+https://github.com/maorong-rong/plant-omics-hub.git',
+  homepage: 'https://github.com/maorong-rong/plant-omics-hub#readme',
+  bugsUrl: 'https://github.com/maorong-rong/plant-omics-hub/issues',
+};
+
+/** 把导出的 package.json 的 repository / homepage / bugs 重写为公开仓。 */
+export function rewritePublicPackageJson(text) {
+  const pkg = JSON.parse(text);
+  pkg.repository = { ...(pkg.repository ?? {}), type: 'git', url: PUBLIC_PACKAGE_METADATA.repositoryUrl };
+  pkg.homepage = PUBLIC_PACKAGE_METADATA.homepage;
+  pkg.bugs = { ...(pkg.bugs ?? {}), url: PUBLIC_PACKAGE_METADATA.bugsUrl };
+  return { pkg, text: `${JSON.stringify(pkg, null, 2)}\n` };
+}
+
+/** 读回断言：三个字段任意一个不指向公开仓就报问题（空数组 = 通过）。 */
+export function checkPublicPackageJson(pkg) {
+  const problems = [];
+  if (pkg?.repository?.url !== PUBLIC_PACKAGE_METADATA.repositoryUrl) {
+    problems.push(`public package.json repository.url = ${pkg?.repository?.url ?? '（缺）'}，应指向 ${PUBLIC_PACKAGE_METADATA.repositoryUrl}`);
+  }
+  if (pkg?.homepage !== PUBLIC_PACKAGE_METADATA.homepage) {
+    problems.push(`public package.json homepage = ${pkg?.homepage ?? '（缺）'}，应指向 ${PUBLIC_PACKAGE_METADATA.homepage}`);
+  }
+  if (pkg?.bugs?.url !== PUBLIC_PACKAGE_METADATA.bugsUrl) {
+    problems.push(`public package.json bugs.url = ${pkg?.bugs?.url ?? '（缺）'}，应指向 ${PUBLIC_PACKAGE_METADATA.bugsUrl}`);
+  }
+  return problems;
+}
+
 const BINARY_EXTS = new Set([
   '.png', '.jpg', '.jpeg', '.webp', '.gif', '.ico', '.pdf', '.zip', '.tgz', '.gz', '.woff', '.woff2', '.ttf',
 ]);
@@ -417,6 +455,9 @@ export function renderPublishMd({ localSha, localSubject, date, fileCount, baseS
     '  `docs/competitive/`、`docs/architecture/`、`docs/capability/`、`docs/species/`）、内部截图（`web/screenshots/`、`site/screenshots/`）',
     '  与过程规划文档；公开仓是插件分发，不是研究记录镜像。',
     '',
+    '导出时会把 `package.json` 的 `repository` / `homepage` / `bugs` 重写为公开仓并在最终树上读回断言：',
+    'npm provenance 会核对 `repository.url` 与构建来源仓库，沿用私有仓字段会被 422 拒绝。',
+    '',
   ];
 
   if (removals.length > 0) {
@@ -560,6 +601,9 @@ async function main() {
   const indexFile = path.join(tempDir, 'index');
   const env = { ...process.env, GIT_INDEX_FILE: indexFile };
   try {
+    const hashBlob = (text) => execFileSync('git', ['hash-object', '-w', '--stdin'], {
+      cwd: ROOT, input: text, encoding: 'utf8',
+    }).trim();
     git(['read-tree', 'HEAD'], { env });
     for (const file of skipped) git(['update-index', '--force-remove', '--', file], { env });
 
@@ -594,7 +638,16 @@ async function main() {
       exportedText.set(file, text);
     }
 
-    // ② 基线里存在、本地没有、但不许被快照删掉的文件：
+    // ② 公开仓 package.json 的仓库元数据必须指向公开仓：npm provenance 会核对 repository.url。
+    //    不重写就会在发布时被 422 拒绝（2026-11-16 实测）；最终树里还会再读回断言一次。
+    if (kept.includes('package.json')) {
+      const source = exportedText.get('package.json') ?? blobAt('HEAD', 'package.json').toString('utf8');
+      const rewritten = rewritePublicPackageJson(source);
+      exportedText.set('package.json', rewritten.text);
+      git(['update-index', '--add', '--cacheinfo', `100644,${hashBlob(rewritten.text)},package.json`], { env });
+    }
+
+    // ③ 基线里存在、本地没有、但不许被快照删掉的文件：
     //    - 精确路径（npm 发布流水线）；
     //    - 整类目录（deploy/）：本地版本含真实主机 IP 与姓名，不能发；但公开仓里那份是**不含 IP 的旧版**，
     //      直接删掉等于把已经公开的部署文档撤下来。所以按基线原文保留，等脱敏后再用本地版本覆盖。
@@ -629,9 +682,6 @@ async function main() {
 
     // ① 先放一个**占位** PUBLISH.md：只为让树的形状与最终一致（它的存在与否会改变 diff，
     //    内容不会）。真正的 PUBLISH.md 要等算出本次"移除 / 迁移"清单之后才能写。
-    const hashBlob = (text) => execFileSync('git', ['hash-object', '-w', '--stdin'], {
-      cwd: ROOT, input: text, encoding: 'utf8',
-    }).trim();
     git(['update-index', '--add', '--cacheinfo', `100644,${hashBlob('PUBLISH.md placeholder\n')},PUBLISH.md`], { env });
     const treePreview = git(['write-tree'], { env }).trim();
 
@@ -689,13 +739,18 @@ async function main() {
       file,
       text: git(['cat-file', '-p', `${tree}:${file}`]),
     }));
-    const deployProblems = [
+    // package.json 读回断言：三个仓库字段不指向公开仓就 fail（否则下次发版会一模一样再挂）。
+    const publicPkgProblems = checkPublicPackageJson(
+      JSON.parse(git(['cat-file', '-p', `${tree}:package.json`])),
+    );
+    const treeProblems = [
       ...checkDeploySnapshot(deploySnapshot),
       ...checkDeployNoPublicIp(deployEntries),
+      ...publicPkgProblems,
     ];
-    if (deployProblems.length > 0) {
-      process.stderr.write('❌ 快照 deploy/ 断言未通过：\n');
-      for (const problem of deployProblems) process.stderr.write(`  - ${problem}\n`);
+    if (treeProblems.length > 0) {
+      process.stderr.write('❌ 快照断言未通过：\n');
+      for (const problem of treeProblems) process.stderr.write(`  - ${problem}\n`);
       process.exitCode = 1;
       return;
     }

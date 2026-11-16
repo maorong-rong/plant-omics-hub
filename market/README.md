@@ -2,35 +2,36 @@
 
 `index.json` 是给 DSH「插件 → 发现 → 添加索引源」用的**格式 1 索引**，用户添加一次这个 URL，就能在市场里搜到并安装 `plantomics-hub`。
 
-> **当前状态：文件已就绪，尚未托管。** 没有任何公开 URL 指向它之前，界面里不应显示"索引源地址"。
+> **当前状态：已随公开仓发布并托管。** 索引源地址（format 1）：
+> `https://raw.githubusercontent.com/maorong-rong/plant-omics-hub/main/market/index.json`
 
 ## 一、它现在装的是什么
 
 | 项 | 值 | 出处 |
 |---|---|---|
 | 插件名 | `plantomics-hub` | npm 包名 |
-| 版本 | `0.1.2`（第一条，市场安装目标）；其后保留 `0.1.1`、`0.1.0` | `npm view plantomics-hub dist-tags.latest` |
-| `publishTimestamp` | `1794056764` | npm registry 的 `time["0.1.2"]` = `2026-11-07T13:06:04.351Z`，按 Unix **秒** 换算 |
-| `source.type` | `npm` | 安装目标即 `plantomics-hub@0.1.2` |
+| 版本 | `0.2.2`（第一条，市场安装目标）；其后保留 `0.1.2`、`0.1.1`、`0.1.0` | `npm view plantomics-hub dist-tags.latest` |
+| `publishTimestamp` | `1794810905` | npm registry 的 `time["0.2.2"]` = `2026-11-16T06:35:05.465Z`，按 Unix **秒** 换算 |
+| `source.type` | `npm` | 安装目标即 `plantomics-hub@0.2.2` |
 | `engines.dsh` | `>=0.2.1-rc.2` | 与 `package.json` 的 `engines.dsh` 一致 |
-| 卡片文案 | 中英两段，**数字按「发布口径」算出**（当前 `0.1.2`：10 源 41 工具） | `market/scripts/build-copy.mjs` 生成，`check-index.mjs` 核对 |
+| 卡片文案 | 中英两段，**数字按「发布口径」算出**（当前 `0.2.2`：11 源 49 工具，默认 2 + 按需展开 47） | `market/scripts/build-copy.mjs` 生成，`check-index.mjs` 核对 |
 | 图标 | 内联 `data:image/svg+xml;base64,…`，解码 1920 字节（上限 32 KiB） | `market/assets/icon.svg` → `build-icon.mjs` |
 
 **两个口径别混**（2026-10-31 全员定案）：
 
 | 口径 | 真相 | 用在哪 |
 |---|---|---|
-| 源码口径 | 本地 `dist/` 注册表（今天 10 源 41 工具） | 落地页 `site/`，页面上标「当前源码口径」 |
-| **发布口径** | `index.json` 的 install spec 指向的 npm tarball（`0.1.2`：10 源 41 工具） | **市场卡片**，因为它描述「装上能拿到什么」 |
+| 源码口径 | 本地 `dist/` 注册表（今天 11 源 49 工具） | 落地页 `site/`，页面上标「当前源码口径」 |
+| **发布口径** | `index.json` 的 install spec 指向的 npm tarball（`0.2.2`：11 源 49 工具） | **市场卡片**，因为它描述「装上能拿到什么」 |
 
 两边不同不代表哪个写错：发布滞后是常态，但**索引不能承诺装不出来的能力**。数字的唯一实现在
 `scripts/counts.mjs`（`--json` 出源码口径，`--published` 联网解包 tarball 出发布口径），市场的措辞只取它算出的数，本目录不自己数数。
 
-**2026-11-07 已发布 `0.1.2`**：npm `latest`、市场 `versions` 第一条与源码 `package.json` 都是 `0.1.2`。
-`counts --published` 核的是**已发布**的 0.1.2 tarball（10 源 / 41 工具）。公网云服务仍是 0.1.1，
-其 0.1.2 部署需要服务器访问授权。
+**2026-11-16 已发布 `0.2.2`**：npm `latest`、市场 `versions` 第一条与源码 `package.json` 都是 `0.2.2`。
+`counts --published` 核的是**已发布**的 0.2.2 tarball（11 源 / 49 工具：默认 2 个元工具 + 按需展开 47 个业务工具）。
+pm 包页面的 `repository` 指向公开仓 `plant-omics-hub`。
 
-**为什么没有 `0.0.0-stage`**：它是早期占位版本，语义不明。放进索引会让市场里出现一个用户可能误装的版本，所以只登记 `0.1.2`、`0.1.1` 与 `0.1.0`。
+**为什么没有 `0.0.0-stage`**：它是早期占位版本，语义不明。放进索引会让市场里出现一个用户可能误装的版本，所以只登记 `0.2.2`、`0.1.2`、`0.1.1` 与 `0.1.0`。
 
 ## 二、校验（用官方校验器，不是自己写的规则）
 
@@ -39,7 +40,7 @@
 ```
 PARSE OK
 plugins=["plantomics-hub"]
-install spec = {"spec":"plantomics-hub@0.1.2"}
+install spec = {"spec":"plantomics-hub@0.2.2"}
 ```
 
 为了证明"通过"不是空过，同一份校验器对 6 个故意写坏的变体全部拒绝：

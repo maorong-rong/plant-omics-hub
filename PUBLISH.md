@@ -5,10 +5,10 @@
 
 | 项 | 值 |
 |---|---|
-| 对应本地提交 | `bc3639af21ab28d17a2fb2327ef5414eecfe44c8` — chore(publish): 再排除 docs/capability 与 docs/species 过程盘点 |
-| 导出时间 | 2026-11-14 09:27:00 UTC |
+| 对应本地提交 | `562072284f4c43c3d8d9a64aaeb5bf0f4563b5b4` — chore(release): 0.2.2 发布口径数据（站点 / 市场文案 / 索引说明） |
+| 导出时间 | 2026-11-16 10:20:41 UTC |
 | 文件数 | 383 |
-| 快照基线 | `78ea8b09a632d4c44c319221e73eeebabacf203b`（首个快照之后的提交都在此之上快进） |
+| 快照基线 | `62673fddc7f294fe3ac09fac24d9a763c3dc5ee9`（首个快照之后的提交都在此之上快进） |
 
 ## 导出范围
 
@@ -21,6 +21,9 @@
 - 2026-11-14 起另不含：未发表研究与论文物料（`analysis/`、`explore/`、`docs/paper/`、`docs/figures/`、
   `docs/competitive/`、`docs/architecture/`、`docs/capability/`、`docs/species/`）、内部截图（`web/screenshots/`、`site/screenshots/`）
   与过程规划文档；公开仓是插件分发，不是研究记录镜像。
+
+导出时会把 `package.json` 的 `repository` / `homepage` / `bugs` 重写为公开仓并在最终树上读回断言：
+npm provenance 会核对 `repository.url` 与构建来源仓库，沿用私有仓字段会被 422 拒绝。
 
 ## 本次导出对内部链接的降级
 
